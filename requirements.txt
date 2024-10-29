@@ -1,7 +1,8 @@
-streamlit==1.25.0               # Streamlit version may vary; use the latest stable version
-openai==0.28.0                  # For interacting with OpenAI API
-PyPDF2==3.0.1                   # For extracting text from PDF files
-langchain==0.0.275            # Latest LangChain for text splitting, embeddings, and vector store
-chromadb==0.4.3                 # Chroma for vector storage and similarity search
-python-dotenv==1.0.0            # To manage environment variables from .env file
+streamlit==1.25.0               
+openai==0.28.0                  
+PyPDF2==3.0.1           
+langchain==0.2.11          
+langchain_community==0.0.1    
+chromadb==0.4.3                
+python-dotenv==1.0.0     
 pillow==9.5.0 

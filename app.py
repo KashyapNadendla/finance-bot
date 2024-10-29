@@ -4,8 +4,8 @@ import os
 import PyPDF2
 from io import BytesIO
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma  # Using Chroma DB for vector storage
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 from dotenv import load_dotenv
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
