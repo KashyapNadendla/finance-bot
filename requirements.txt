@@ -4,3 +4,4 @@ PyPDF2==3.0.1                   # For extracting text from PDF files
 langchain==0.0.275            # Latest LangChain for text splitting, embeddings, and vector store
 chromadb==0.4.3                 # Chroma for vector storage and similarity search
 python-dotenv==1.0.0            # To manage environment variables from .env file
+pillow==9.5.0 
