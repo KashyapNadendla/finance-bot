@@ -4,8 +4,11 @@ import os
 import PyPDF2
 from io import BytesIO
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import Chroma
+# from langchain_openai import OpenAIEmbeddings
+# from langchain_text_splitters import CharacterTextSplitter
+# from langchain_community.vectorstores import Chroma
 from dotenv import load_dotenv
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
