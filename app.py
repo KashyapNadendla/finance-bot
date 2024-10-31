@@ -60,7 +60,6 @@ def create_vector_store(texts):
     vector_store.persist()
     return vector_store
 
-# Function to scout assets with real-time price action from Yahoo Finance
 def scout_assets():
     tickers = [
         "AAPL", "GOOGL", "GOOG", "AMZN", "META", "BRK.A", "TSLA", "AVGO", "WMT", "JPM",
@@ -69,25 +68,50 @@ def scout_assets():
         "AMGN", "PDD", "UBER", "DIS", "NVDA", "MSFT", "UNH", "LLY", "TXN", "PG",
         "MA", "CMCSA", "ABT", "NEE", "COST", "XOM", "CVX", "PYPL", "BABA", "BAC"
     ]
-    suggestions = []
+    
+    # List to store asset information
+    asset_data = []
+    
     for ticker in tickers:
+        stock = yf.Ticker(ticker)
+        
         try:
-            stock = yf.Ticker(ticker)
+            # Fetch the latest data with a 1-day interval for the most recent price
             hist = stock.history(period="1d", interval="1m")
-            if not hist.empty:
-                latest_close = hist['Close'].iloc[-1]
-                price_change = (latest_close - hist['Close'].iloc[0]) / hist['Close'].iloc[0]
-                dividend_yield = stock.info.get("dividendYield", 0)
-                if price_change > 0.02 or dividend_yield > 0.02:
-                    suggestions.append({
-                        "Ticker": ticker,
-                        "Price Change (Today)": f"{price_change:.2%}",
-                        "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield else "N/A",
-                        "Current Price": f"${latest_close:.2f}"
-                    })
+            
+            # Check if data was retrieved successfully
+            if hist.empty:
+                st.warning(f"No data found for {ticker}")
+                continue
+            
+            # Get the most recent close price and calculate price change
+            latest_close = hist['Close'].iloc[-1]
+            open_price = hist['Close'].iloc[0]
+            price_change_today = ((latest_close - open_price) / open_price) * 100
+            
+            # Fetch additional details like dividend yield
+            dividend_yield = stock.info.get("dividendYield", "N/A")
+            
+            # Append data to the list
+            asset_data.append({
+                "Ticker": ticker,
+                "Current Price": f"${latest_close:.2f}",
+                "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
+                "Price Change (Today)": f"{price_change_today:.2f}%"
+            })
+        
         except Exception as e:
-            st.warning(f"Could not retrieve data for {ticker}: {e}")
-    return suggestions
+            st.warning(f"Error retrieving data for {ticker}: {e}")
+    
+    return asset_data
+
+
+# Example of calling the function and displaying in Streamlit
+st.header("Asset Data for All Tickers")
+asset_data = scout_assets()
+for asset in asset_data:
+    st.write(asset)
+
 
 # Function to format asset suggestions as text
 def format_asset_suggestions(suggestions):
@@ -106,6 +130,7 @@ def format_asset_suggestions(suggestions):
 def generate_response(financial_data, user_message, vector_store):
     # Always call scout_assets to get asset suggestions
     asset_suggestions = scout_assets()
+    print(asset_suggestions, "NVDA SUGESSTIONS")
     formatted_suggestions = format_asset_suggestions(asset_suggestions)
 
     # Generate the query and retrieve relevant documents
