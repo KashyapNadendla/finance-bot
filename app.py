@@ -295,7 +295,6 @@ import streamlit as st
 from openai import OpenAI
 import os
 import PyPDF2
-from io import BytesIO
 import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
@@ -303,8 +302,9 @@ from langchain.vectorstores import Chroma
 from dotenv import load_dotenv
 from newsapi import NewsApiClient
 from datetime import datetime, timedelta
-import pandas as pd  # Added for data manipulation
-import requests  # Added for fetching cryptocurrency data
+import pandas as pd
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
@@ -327,7 +327,9 @@ if 'chat_history' not in st.session_state:
 if 'vector_store' not in st.session_state:
     st.session_state['vector_store'] = None
 
-# Removed authentication state initialization and login function (Suggestion 2b)
+if 'asset_data' not in st.session_state:
+    st.session_state['asset_data'] = []
+    st.session_state['asset_data_timestamp'] = None  # To store the time when data was last updated
 
 # Function to load and process PDFs from the data folder with error handling
 def load_and_process_pdfs(data_folder):
@@ -342,7 +344,6 @@ def load_and_process_pdfs(data_folder):
                     pdf_texts.append(text)
                 st.write(f"Processed {filename}")  # Feedback to the user
             except PyPDF2.errors.PdfReadError:
-                # Log instead of displaying a warning in the app
                 print(f"Warning: '{filename}' could not be processed (EOF marker not found). Skipping.")
             except Exception as e:
                 print(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
@@ -366,7 +367,7 @@ def create_vector_store(texts):
 # Function to fetch the top 3 finance-related news articles
 def fetch_finance_news():
     today = datetime.today().strftime('%Y-%m-%d')
-    last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')  # Date range for past week
+    last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')
 
     news = newsapi.get_everything(
         q="finance OR economy",
@@ -384,11 +385,11 @@ def display_finance_news():
     st.subheader("Top 3 Finance News Articles Today")
     articles = fetch_finance_news()
     for i, article in enumerate(articles, 1):
-        # Display the title as a clickable link
         st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
         st.write(f"Source: {article['source']}\n")
 
 # Function to scout assets with real-time price action from Yahoo Finance
+@st.cache_data(ttl=600)
 def scout_assets():
     tickers = [
         "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
@@ -429,70 +430,71 @@ def scout_assets():
           "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
           "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
           "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
-  # Reduced list for performance
-    # List to store asset information
-    asset_data = []
-    
-    for ticker in tickers:
+
+
+    # Parallel processing with ThreadPoolExecutor
+    def fetch_stock_data(ticker):
         stock = yf.Ticker(ticker)
-        
         try:
-            # Fetch the latest data with a 1-day interval for the most recent price
             hist = stock.history(period="1d", interval="1m")
-            
-            # Check if data was retrieved successfully
             if hist.empty:
-                continue  # Skip if no data found
-            
-            # Get the most recent close price and calculate price change
+                return None  # Skip if no data found
+
             latest_close = hist['Close'].iloc[-1]
             open_price = hist['Close'].iloc[0]
             price_change_today = ((latest_close - open_price) / open_price) * 100
-            
-            # Fetch additional details like dividend yield
             dividend_yield = stock.info.get("dividendYield", "N/A")
-            
-            # Append data to the list
-            asset_data.append({
+
+            return {
                 "Ticker": ticker,
                 "Current Price": f"${latest_close:.2f}",
                 "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
                 "Price Change (Today)": f"{price_change_today:.2f}%"
-            })
-        
+            }
         except Exception as e:
-            # Log error to the console instead of showing it in the app
             print(f"Error retrieving data for {ticker}: {e}")
-    
+            return None
+
+    asset_data = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(fetch_stock_data, ticker): ticker for ticker in tickers}
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                asset_data.append(result)
+
     return asset_data
 
-# Function to display assets in a table with user preferences (Suggestions 1c, 10a)
+# Function to display assets in a table with user preferences
 def display_assets():
     st.header("Asset Data")
-    # Allow users to select preferred assets
     if 'preferred_assets' not in st.session_state:
         st.session_state['preferred_assets'] = []
 
-    asset_data = scout_assets()
-    df = pd.DataFrame(asset_data)
-    st.dataframe(df)
+    # Check if asset data is available
+    if st.session_state['asset_data']:
+        asset_data = st.session_state['asset_data']
+        df = pd.DataFrame(asset_data)
+        st.dataframe(df)
 
-    # Allow user to select preferred assets
-    tickers = df['Ticker'].tolist()
-    selected_assets = st.multiselect(
-        "Select your preferred assets",
-        tickers,
-        default=st.session_state['preferred_assets']
-    )
-    st.session_state['preferred_assets'] = selected_assets
+        # Allow user to select preferred assets
+        tickers = df['Ticker'].tolist()
+        selected_assets = st.multiselect(
+            "Select your preferred assets",
+            tickers,
+            default=st.session_state['preferred_assets']
+        )
+        st.session_state['preferred_assets'] = selected_assets
 
-    if selected_assets:
-        st.write("Your preferred assets:")
-        preferred_df = df[df['Ticker'].isin(selected_assets)]
-        st.dataframe(preferred_df)
-        check_price_alerts()
+        if selected_assets:
+            st.write("Your preferred assets:")
+            preferred_df = df[df['Ticker'].isin(selected_assets)]
+            st.dataframe(preferred_df)
+            check_price_alerts()
+    else:
+        st.info("Asset data not loaded. Click 'Update Stock Prices' to load.")
 
-# Function to check for price alerts (Suggestion 10b)
+# Function to check for price alerts
 def check_price_alerts():
     if 'preferred_assets' in st.session_state and st.session_state['preferred_assets']:
         alert_threshold = st.slider(
@@ -501,21 +503,27 @@ def check_price_alerts():
             max_value=10.0,
             value=5.0
         )
-        asset_data = scout_assets()
-        for asset in asset_data:
-            if asset['Ticker'] in st.session_state['preferred_assets']:
-                price_change = float(asset['Price Change (Today)'].strip('%'))
-                if abs(price_change) >= alert_threshold:
-                    st.warning(f"Alert: {asset['Ticker']} has changed by {price_change:.2f}% today!")
+        if st.session_state['asset_data']:
+            asset_data = st.session_state['asset_data']
+            for asset in asset_data:
+                if asset['Ticker'] in st.session_state['preferred_assets']:
+                    price_change = float(asset['Price Change (Today)'].strip('%'))
+                    if abs(price_change) >= alert_threshold:
+                        st.warning(f"Alert: {asset['Ticker']} has changed by {price_change:.2f}% today!")
+        else:
+            st.info("Asset data not loaded. Please update stock prices to check price alerts.")
 
-# Function to display asset charts (Suggestion 1d)
+# Function to display asset charts
 def display_asset_charts():
-    asset_data = scout_assets()
-    tickers = [asset['Ticker'] for asset in asset_data]
-    selected_ticker = st.selectbox("Select a ticker to view price chart:", tickers)
-    stock = yf.Ticker(selected_ticker)
-    hist = stock.history(period="1mo")
-    st.line_chart(hist['Close'])
+    if st.session_state['asset_data']:
+        asset_data = st.session_state['asset_data']
+        tickers = [asset['Ticker'] for asset in asset_data]
+        selected_ticker = st.selectbox("Select a ticker to view price chart:", tickers)
+        stock = yf.Ticker(selected_ticker)
+        hist = stock.history(period="1mo")
+        st.line_chart(hist['Close'])
+    else:
+        st.info("Asset data not loaded. Please update stock prices to view charts.")
 
 # Function to format asset suggestions as text
 def format_asset_suggestions(suggestions):
@@ -533,16 +541,16 @@ def format_asset_suggestions(suggestions):
 
 # Function to generate response from OpenAI
 def generate_response(financial_data, user_message, vector_store):
-    # Always call scout_assets to get asset suggestions
-    asset_suggestions = scout_assets()
-    formatted_suggestions = format_asset_suggestions(asset_suggestions)
+    if st.session_state['asset_data']:
+        asset_suggestions = st.session_state['asset_data']
+        formatted_suggestions = format_asset_suggestions(asset_suggestions)
+    else:
+        formatted_suggestions = "No asset data available."
 
-    # Generate the query and retrieve relevant documents
     query = financial_data + "\n" + user_message
     docs = vector_store.similarity_search(query, k=3) if vector_store else []
     context = "\n".join([doc.page_content for doc in docs])
 
-    # Construct the prompt with asset suggestions, document context, and user input
     prompt = f"""
     Based on the user's financial data, the following asset suggestions, and the context from documents:
 
@@ -558,7 +566,7 @@ def generate_response(financial_data, user_message, vector_store):
     User Message:
     {user_message}
 
-    Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data, asset suggestions, and the context from the documents in your response. Include Prices of top movers in Stocks based on the data you have.
+    Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data, asset suggestions, and the context from the documents in your response. Include prices of top movers in stocks based on the data you have.
     """
 
     # Generate response from OpenAI
@@ -576,27 +584,31 @@ def generate_response(financial_data, user_message, vector_store):
 # Function to handle the chat interface
 def chat_interface():
     st.header("Chat with Your Personal Finance Assistant")
-    for chat in st.session_state['chat_history']:
-        with st.chat_message("assistant"):
-            st.markdown(chat['bot'])
-        with st.chat_message("user"):
-            st.markdown(chat['user'])
-    
+
+    # Display the chat messages in order
+    for message in st.session_state['chat_history']:
+        with st.chat_message(message['role']):
+            st.markdown(message['content'])
+
     # Get User Input
     user_input = st.chat_input("You:")
     if user_input:
         financial_data = st.session_state['financial_data']
         vector_store = st.session_state['vector_store']
-        response = generate_response(financial_data, user_input, vector_store) if vector_store else "I'm sorry, but I couldn't access the knowledge base documents."
-        st.session_state['chat_history'].append({"user": user_input, "bot": response})
-    
+        response = generate_response(financial_data, user_input, vector_store)
+
+        # Add user message and assistant response to chat history
+        st.session_state['chat_history'].append({"role": "user", "content": user_input})
+        st.session_state['chat_history'].append({"role": "assistant", "content": response})
+
         # Display latest messages
         with st.chat_message("user"):
             st.markdown(user_input)
         with st.chat_message("assistant"):
             st.markdown(response)
 
-# Function for the budgeting tool (Suggestion 2c)
+
+# Function for the budgeting tool
 def budgeting_tool():
     st.header("Budgeting Tool")
     income = st.number_input(
@@ -617,7 +629,7 @@ def budgeting_tool():
     else:
         st.error(f"Monthly Deficit: ${-savings:.2f}")
 
-# Function to get cryptocurrency prices (Suggestion 9a)
+# Function to get cryptocurrency prices
 def get_crypto_prices():
     response = requests.get(
         "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
@@ -627,10 +639,33 @@ def get_crypto_prices():
 
 # Main App
 
-# Add a welcome header with an emoji (Suggestion 7b)
+# Add a welcome header with an emoji
 st.markdown("# Welcome to Your Personal Finance Assistant 💰")
 
-# Sidebar with user inputs (Suggestion 1a)
+# Load asset data on initial app load
+if not st.session_state['asset_data']:
+    with st.spinner('Loading stock prices...'):
+        st.session_state['asset_data'] = scout_assets()
+        st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+# Display stock prices updated time and Update button at the top right
+col1, col2 = st.columns([8, 2])
+
+with col1:
+    pass  # Empty column for layout alignment
+
+with col2:
+    if st.session_state['asset_data_timestamp']:
+        st.write(f"**Stock prices updated as of:** {st.session_state['asset_data_timestamp']}")
+    else:
+        st.write("**Stock prices not loaded.**")
+    if st.button("Update Stock Prices"):
+        with st.spinner("Updating stock prices..."):
+            st.session_state['asset_data'] = scout_assets()
+            st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            st.success("Stock prices updated.")
+
+# Sidebar with user inputs
 with st.sidebar:
     st.header("User Settings")
 
@@ -646,7 +681,7 @@ with st.sidebar:
             else:
                 st.warning("No PDF documents found in the 'data' folder.")
 
-    # Allow Users to Upload Their Own Documents (Suggestion 2a)
+    # Allow Users to Upload Their Own Documents
     st.header("Upload Your Own Documents")
     uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
     if uploaded_files:
@@ -673,7 +708,7 @@ with st.sidebar:
             st.session_state['financial_data'] = financial_data_input
             st.success("Financial data updated.")
 
-# Create Tabs for Navigation (Suggestion 1b)
+# Create Tabs for Navigation
 tab1, tab2, tab3, tab4 = st.tabs(["News", "Assets", "Chat", "Tools"])
 
 with tab1:
@@ -683,10 +718,10 @@ with tab2:
     display_assets()
     st.subheader("Asset Price Chart")
     display_asset_charts()
-    st.subheader("Cryptocurrency Prices (USD)")
-    crypto_data = get_crypto_prices()
-    for crypto, info in crypto_data.items():
-        st.write(f"{crypto.capitalize()} Price: ${info['usd']}")  # Displaying crypto prices (Suggestion 9a)
+    # st.subheader("Cryptocurrency Prices (USD)")
+    # crypto_data = get_crypto_prices()
+    # for crypto, info in crypto_data.items():
+    #     st.write(f"{crypto.capitalize()} Price: ${info['usd']}")
 
 with tab3:
     chat_interface()
@@ -694,9 +729,4 @@ with tab3:
 with tab4:
     budgeting_tool()
 
-# Note: For theme customization (Suggestion 7a), you need to create a .streamlit/config.toml file
-# with your desired theme settings, as code cannot modify files outside its scope.
-
-# Accessibility Note (Suggestion 8): The app uses Streamlit's responsive design features to be mobile-friendly.
-# Tooltips and help texts have been added to inputs for better user understanding.
 
