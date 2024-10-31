@@ -13,11 +13,10 @@ st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
 # Load environment variables from the .env file
 load_dotenv()
+API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Set up OpenAI client instance
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+client = OpenAI(api_key=API_KEY)
 
 # Initialize session state variables
 if 'financial_data' not in st.session_state:
@@ -27,7 +26,7 @@ if 'chat_history' not in st.session_state:
     st.session_state['chat_history'] = []
 
 if 'vector_store' not in st.session_state:
-    st.session_state['vector_store'] = None  # Initially, no vector store is loaded
+    st.session_state['vector_store'] = None
 
 # Function to load and process PDFs from the data folder with error handling
 def load_and_process_pdfs(data_folder):
@@ -38,11 +37,7 @@ def load_and_process_pdfs(data_folder):
             try:
                 with open(filepath, 'rb') as f:
                     reader = PyPDF2.PdfReader(f)
-                    text = ""
-                    for page_num in range(len(reader.pages)):
-                        page_text = reader.pages[page_num].extract_text()
-                        if page_text:  # Ensure text extraction was successful
-                            text += page_text
+                    text = "".join([page.extract_text() or "" for page in reader.pages])
                     pdf_texts.append(text)
             except PyPDF2.errors.PdfReadError:
                 st.warning(f"Warning: '{filename}' could not be processed (EOF marker not found). Skipping.")
@@ -50,15 +45,12 @@ def load_and_process_pdfs(data_folder):
                 st.warning(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
     return pdf_texts
 
-
 # Function to create a vector store from texts
 def create_vector_store(texts):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    texts_chunks = []
-    for text in texts:
-        texts_chunks.extend(text_splitter.split_text(text))
+    texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
 
-    embeddings = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
+    embeddings = OpenAIEmbeddings(api_key=API_KEY)
     vector_store = Chroma.from_texts(
         texts_chunks,
         embeddings,
@@ -70,31 +62,32 @@ def create_vector_store(texts):
 
 # Function to scout assets with real-time price action from Yahoo Finance
 def scout_assets():
-    tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN", "NVDA", "JNJ", "META"]
+    tickers = [
+        "AAPL", "GOOGL", "GOOG", "AMZN", "META", "BRK.A", "TSLA", "AVGO", "WMT", "JPM",
+        "V", "HD", "ABBV", "NFLX", "CRM", "ASML", "MRK", "TMUS", "AMD", "PEP",
+        "CSCO", "ADBE", "TMO", "PM", "NOW", "CAT", "ISRG", "INTU", "VZ", "GS",
+        "AMGN", "PDD", "UBER", "DIS", "NVDA", "MSFT", "UNH", "LLY", "TXN", "PG",
+        "MA", "CMCSA", "ABT", "NEE", "COST", "XOM", "CVX", "PYPL", "BABA", "BAC"
+    ]
     suggestions = []
     for ticker in tickers:
-        stock = yf.Ticker(ticker)
-        
-        # Fetch the latest data with a 1-minute interval to get the most recent price
-        hist = stock.history(period="1d", interval="1m")
-        
-        # Only proceed if we have recent data
-        if not hist.empty:
-            latest_close = hist['Close'].iloc[-1]  # Get the most recent close price
-            price_change = (latest_close - hist['Close'].iloc[0]) / hist['Close'].iloc[0]
-            dividend_yield = stock.info.get("dividendYield", 0)
-
-            # Adding a recommendation criterion based on price change or dividend yield
-            if price_change > 0.02 or dividend_yield > 0.02:  # Adjust threshold as needed
-                suggestions.append({
-                    "Ticker": ticker,
-                    "Price Change (Today)": f"{price_change:.2%}",
-                    "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield else "N/A",
-                    "Current Price": f"${latest_close:.2f}"
-                })
-
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d", interval="1m")
+            if not hist.empty:
+                latest_close = hist['Close'].iloc[-1]
+                price_change = (latest_close - hist['Close'].iloc[0]) / hist['Close'].iloc[0]
+                dividend_yield = stock.info.get("dividendYield", 0)
+                if price_change > 0.02 or dividend_yield > 0.02:
+                    suggestions.append({
+                        "Ticker": ticker,
+                        "Price Change (Today)": f"{price_change:.2%}",
+                        "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield else "N/A",
+                        "Current Price": f"${latest_close:.2f}"
+                    })
+        except Exception as e:
+            st.warning(f"Could not retrieve data for {ticker}: {e}")
     return suggestions
-
 
 # Function to format asset suggestions as text
 def format_asset_suggestions(suggestions):
@@ -104,59 +97,52 @@ def format_asset_suggestions(suggestions):
     for asset in suggestions:
         suggestion_text += (
             f"**{asset['Ticker']}**\n"
-            f"- Price Change (1y): {asset['Price Change (1y)']}\n"
+            f"- Price Change (Today): {asset['Price Change (Today)']}\n"
             f"- Dividend Yield: {asset['Dividend Yield']}\n"
             f"- Current Price: {asset['Current Price']}\n\n"
         )
     return suggestion_text
 
-# Enhanced generate_response function with improved real-time data handling
 def generate_response(financial_data, user_message, vector_store):
-    # Detect if the user is requesting real-time data or stock recommendations
-    if "fetch data" in user_message.lower() or "suggest assets" in user_message.lower() or "real-time stock prices" in user_message.lower():
-        # Call scout_assets to fetch the latest stock data
-        asset_suggestions = scout_assets()
-        
-        # Format the suggestions into a user-friendly response
-        response = format_asset_suggestions(asset_suggestions)
-        
-        # Check if there are no suggestions based on criteria, and inform the user accordingly
-        if not asset_suggestions:
-            response = "Currently, no assets meet the criteria for recommendation based on recent performance and dividend yield."
-        
-    else:
-        # Default response using financial data and context from documents
-        query = financial_data + "\n" + user_message
-        docs = vector_store.similarity_search(query, k=3)
-        context = "\n".join([doc.page_content for doc in docs])
-        
-        prompt = f"""
-        Based on the user's financial data and the following context:
+    # Always call scout_assets to get asset suggestions
+    asset_suggestions = scout_assets()
+    formatted_suggestions = format_asset_suggestions(asset_suggestions)
 
-        Financial Data:
-        {financial_data}
+    # Generate the query and retrieve relevant documents
+    query = financial_data + "\n" + user_message
+    docs = vector_store.similarity_search(query, k=3)
+    context = "\n".join([doc.page_content for doc in docs])
 
-        Context from documents:
-        {context}
+    # Construct the prompt with asset suggestions, document context, and user input
+    prompt = f"""
+    Based on the user's financial data, the following asset suggestions, and the context from documents:
 
-        User Message:
-        {user_message}
+    Financial Data:
+    {financial_data}
 
-        Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data and the context from the documents in your response.
-        """
-        
-        # Generate response from OpenAI
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful and knowledgeable personal finance assistant. Use the user's financial data and the provided context to provide personalized advice."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-        response = completion.choices[0].message.content
+    Asset Suggestions:
+    {formatted_suggestions}
+
+    Context from documents:
+    {context}
+
+    User Message:
+    {user_message}
+
+    Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data, asset suggestions, and the context from the documents in your response. Include Prices of top movers in Stocks based on the data you have.
+    """
+
+    # Generate response from OpenAI
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a helpful and knowledgeable personal finance assistant. You can help people make rational Financial Decisions."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    response = completion.choices[0].message.content
 
     return response
-
 
 # UI Section for Processing Documents
 st.header("Process Documents for Vector Store")
@@ -182,24 +168,18 @@ with st.form("financial_data_form"):
 
 # Chat Interface
 st.header("Chat with Your Personal Finance Assistant")
-if st.session_state['chat_history']:
-    for chat in st.session_state['chat_history']:
-        with st.chat_message("assistant"):
-            st.markdown(chat['bot'])
-        with st.chat_message("user"):
-            st.markdown(chat['user'])
+for chat in st.session_state['chat_history']:
+    with st.chat_message("assistant"):
+        st.markdown(chat['bot'])
+    with st.chat_message("user"):
+        st.markdown(chat['user'])
 
 # Get User Input
 user_input = st.chat_input("You:")
 if user_input:
     financial_data = st.session_state['financial_data']
     vector_store = st.session_state['vector_store']
-    if vector_store is not None:
-        response = generate_response(financial_data, user_input, vector_store)
-    else:
-        response = "I'm sorry, but I couldn't access the knowledge base documents."
-    
-    # Append chat history
+    response = generate_response(financial_data, user_input, vector_store) if vector_store else "I'm sorry, but I couldn't access the knowledge base documents."
     st.session_state['chat_history'].append({"user": user_input, "bot": response})
 
     # Display latest messages
