@@ -2,20 +2,25 @@ import streamlit as st
 from openai import OpenAI
 import os
 import PyPDF2
+from io import BytesIO
 import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from dotenv import load_dotenv
+from newsapi import NewsApiClient
+from datetime import datetime
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
 # Load environment variables from the .env file
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")  # Set up NEWS_API_KEY in .env
 
 # Set up OpenAI client instance
 client = OpenAI(api_key=API_KEY)
+newsapi = NewsApiClient(api_key=NEWS_API_KEY)
 
 # Initialize session state variables
 if 'financial_data' not in st.session_state:
@@ -59,6 +64,28 @@ def create_vector_store(texts):
     )
     vector_store.persist()
     return vector_store
+
+# Function to fetch the top 3 finance-related news articles
+def fetch_finance_news():
+    today = datetime.today().strftime('%Y-%m-%d')
+    news = newsapi.get_everything(
+        q="finance",
+        from_param=today,
+        language="en",
+        sort_by="relevancy",
+        page_size=3
+    )
+    articles = news['articles']
+    return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+
+# Function to display the top finance news in Streamlit
+def display_finance_news():
+    st.subheader("Top 3 Finance News Articles Today")
+    articles = fetch_finance_news()
+    for i, article in enumerate(articles, 1):
+        st.write(f"**{i}. {article['title']}**")
+        st.write(f"Source: {article['source']}")
+        st.write(f"[Read more]({article['url']})\n")
 
 # Function to scout assets with real-time price action from Yahoo Finance
 def scout_assets():
@@ -105,6 +132,9 @@ def scout_assets():
             print(f"Error retrieving data for {ticker}: {e}")
     
     return asset_data
+
+# Display news articles in Streamlit
+display_finance_news()
 
 # Function to format asset suggestions as text
 def format_asset_suggestions(suggestions):
