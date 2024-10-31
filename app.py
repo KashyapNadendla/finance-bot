@@ -2,7 +2,6 @@ import streamlit as st
 from openai import OpenAI
 import os
 import PyPDF2
-from io import BytesIO
 import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
@@ -40,9 +39,10 @@ def load_and_process_pdfs(data_folder):
                     text = "".join([page.extract_text() or "" for page in reader.pages])
                     pdf_texts.append(text)
             except PyPDF2.errors.PdfReadError:
-                st.warning(f"Warning: '{filename}' could not be processed (EOF marker not found). Skipping.")
+                # Log instead of displaying a warning in the app
+                print(f"Warning: '{filename}' could not be processed (EOF marker not found). Skipping.")
             except Exception as e:
-                st.warning(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
+                print(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
     return pdf_texts
 
 # Function to create a vector store from texts
@@ -60,12 +60,13 @@ def create_vector_store(texts):
     vector_store.persist()
     return vector_store
 
+# Function to scout assets with real-time price action from Yahoo Finance
 def scout_assets():
     tickers = [
-        "AAPL", "GOOGL", "GOOG", "AMZN", "META", "BRK.A", "TSLA", "AVGO", "WMT", "JPM",
-        "V", "HD", "ABBV", "NFLX", "CRM", "ASML", "MRK", "TMUS", "AMD", "PEP",
+        "AAPL", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "AVGO", "WMT", "JPM",
+        "V", "HD", "NFLX", "CRM", "MRK", "AMD", "PEP",
         "CSCO", "ADBE", "TMO", "PM", "NOW", "CAT", "ISRG", "INTU", "VZ", "GS",
-        "AMGN", "PDD", "UBER", "DIS", "NVDA", "MSFT", "UNH", "LLY", "TXN", "PG",
+        "AMGN", "UBER", "DIS", "NVDA", "MSFT", "UNH", "LLY", "TXN", "PG",
         "MA", "CMCSA", "ABT", "NEE", "COST", "XOM", "CVX", "PYPL", "BABA", "BAC"
     ]
     
@@ -81,8 +82,7 @@ def scout_assets():
             
             # Check if data was retrieved successfully
             if hist.empty:
-                st.warning(f"No data found for {ticker}")
-                continue
+                continue  # Skip if no data found
             
             # Get the most recent close price and calculate price change
             latest_close = hist['Close'].iloc[-1]
@@ -101,17 +101,10 @@ def scout_assets():
             })
         
         except Exception as e:
-            st.warning(f"Error retrieving data for {ticker}: {e}")
+            # Log error to the console instead of showing it in the app
+            print(f"Error retrieving data for {ticker}: {e}")
     
     return asset_data
-
-
-# Example of calling the function and displaying in Streamlit
-st.header("Asset Data for All Tickers")
-asset_data = scout_assets()
-for asset in asset_data:
-    st.write(asset)
-
 
 # Function to format asset suggestions as text
 def format_asset_suggestions(suggestions):
@@ -130,7 +123,6 @@ def format_asset_suggestions(suggestions):
 def generate_response(financial_data, user_message, vector_store):
     # Always call scout_assets to get asset suggestions
     asset_suggestions = scout_assets()
-    print(asset_suggestions, "NVDA SUGESSTIONS")
     formatted_suggestions = format_asset_suggestions(asset_suggestions)
 
     # Generate the query and retrieve relevant documents
