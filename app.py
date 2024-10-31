@@ -9,7 +9,7 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from dotenv import load_dotenv
 from newsapi import NewsApiClient
-from datetime import datetime
+from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
@@ -66,26 +66,46 @@ def create_vector_store(texts):
     return vector_store
 
 # Function to fetch the top 3 finance-related news articles
+# def fetch_finance_news():
+#     today = datetime.today().strftime('%Y-%m-%d')
+#     news = newsapi.get_everything(
+#         q="finance",
+#         from_param=today,
+#         language="en",
+#         sort_by="relevancy",
+#         page_size=3
+#     )
+#     articles = news['articles']
+
+
+#     print(news, "ARTICLES", articles)
+#     return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+
+
 def fetch_finance_news():
     today = datetime.today().strftime('%Y-%m-%d')
+    last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')  # Date range for past week
+
     news = newsapi.get_everything(
-        q="finance",
-        from_param=today,
+        q="finance OR economy",
+        from_param=last_week,
+        to=today,
         language="en",
         sort_by="relevancy",
         page_size=3
     )
-    articles = news['articles']
+    articles = news.get('articles', [])
     return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+
 
 # Function to display the top finance news in Streamlit
 def display_finance_news():
     st.subheader("Top 3 Finance News Articles Today")
     articles = fetch_finance_news()
     for i, article in enumerate(articles, 1):
-        st.write(f"**{i}. {article['title']}**")
-        st.write(f"Source: {article['source']}")
-        st.write(f"[Read more]({article['url']})\n")
+        # Display the title as a clickable link
+        st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
+        st.write(f"Source: {article['source']}\n")
 
 # Function to scout assets with real-time price action from Yahoo Finance
 def scout_assets():
@@ -132,6 +152,19 @@ def scout_assets():
             print(f"Error retrieving data for {ticker}: {e}")
     
     return asset_data
+
+
+# UI Section for Processing Documents
+st.header("Process Documents for Vector Store")
+if st.button("Process Documents"):
+    with st.spinner('Processing documents...'):
+        data_folder = 'data'
+        pdf_texts = load_and_process_pdfs(data_folder)
+        if pdf_texts:
+            st.session_state['vector_store'] = create_vector_store(pdf_texts)
+            st.success("Documents processed and vector store created.")
+        else:
+            st.warning("No PDF documents found in the 'data' folder.")
 
 # Display news articles in Streamlit
 display_finance_news()
@@ -191,17 +224,7 @@ def generate_response(financial_data, user_message, vector_store):
 
     return response
 
-# UI Section for Processing Documents
-st.header("Process Documents for Vector Store")
-if st.button("Process Documents"):
-    with st.spinner('Processing documents...'):
-        data_folder = 'data'
-        pdf_texts = load_and_process_pdfs(data_folder)
-        if pdf_texts:
-            st.session_state['vector_store'] = create_vector_store(pdf_texts)
-            st.success("Documents processed and vector store created.")
-        else:
-            st.warning("No PDF documents found in the 'data' folder.")
+
 
 # Section for Financial Data Input
 st.header("Enter Your Financial Data")
