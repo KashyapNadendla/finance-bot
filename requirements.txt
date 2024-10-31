@@ -5,5 +5,5 @@ langchain>=0.2.20
 langchain-core>=0.2.26
 chromadb==0.5.5                
 python-dotenv==1.0.0
-pillow==8.4.0
+pillow==8.2.0
 pypika==0.48.9
