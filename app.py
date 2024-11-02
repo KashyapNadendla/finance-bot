@@ -11,6 +11,7 @@ from newsapi import NewsApiClient
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
+from newsapi.newsapi_exception import NewsAPIException
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
@@ -72,28 +73,40 @@ def create_vector_store(texts):
     return vector_store
 
 # Function to fetch the top 3 finance-related news articles
+@st.cache_data(ttl=86400)  # Cache for 24 hours
 def fetch_finance_news():
-    today = datetime.today().strftime('%Y-%m-%d')
-    last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')
+    try:
+        today = datetime.today().strftime('%Y-%m-%d')
+        last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')
 
-    news = newsapi.get_everything(
-        q="finance OR economy",
-        from_param=last_week,
-        to=today,
-        language="en",
-        sort_by="relevancy",
-        page_size=3
-    )
-    articles = news.get('articles', [])
-    return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+        news = newsapi.get_everything(
+            q="finance OR economy",
+            from_param=last_week,
+            to=today,
+            language="en",
+            sort_by="relevancy",
+            page_size=3
+        )
+        articles = news.get('articles', [])
+        return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+    except NewsAPIException as e:
+        if 'rateLimited' in str(e):  # Check for rate limit error in exception message
+            st.warning("News API rate limit exceeded. Please try again later.")
+        else:
+            st.error("An error occurred while fetching news. Please try again later.")
+        return []
 
 # Function to display the top finance news in Streamlit
+# Display the finance news
 def display_finance_news():
     st.subheader("Top 3 Finance News Articles Today")
     articles = fetch_finance_news()
-    for i, article in enumerate(articles, 1):
-        st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
-        st.write(f"Source: {article['source']}\n")
+    if articles:
+        for i, article in enumerate(articles, 1):
+            st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
+            st.write(f"Source: {article['source']}\n")
+    else:
+        st.write("No news articles available at this time.")
 
 # Function to scout assets with real-time price action from Yahoo Finance
 @st.cache_data(ttl=600)
