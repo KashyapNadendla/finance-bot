@@ -11,5 +11,6 @@ yfinance==0.2.47
 langchain-community==0.3.3
 newsapi-python==0.2.6
 protobuf==3.20.3
+tiktoken
 pandas
 requests
