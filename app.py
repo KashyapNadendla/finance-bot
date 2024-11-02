@@ -5,7 +5,7 @@ import PyPDF2
 import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 from dotenv import load_dotenv
 from newsapi import NewsApiClient
 from datetime import datetime, timedelta
@@ -58,18 +58,30 @@ def load_and_process_pdfs(data_folder):
     return pdf_texts
 
 # Function to create a vector store from texts
+# def create_vector_store(texts):
+#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+#     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
+
+#     embeddings = OpenAIEmbeddings(api_key=API_KEY)
+#     vector_store = FAISS.from_texts(
+#         texts_chunks,
+#         embeddings,
+#         collection_name="financial_assistant_collection",        
+#     )
+#     vector_store.persist()
+#     return vector_store
+
+
 def create_vector_store(texts):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
 
     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-    vector_store = Chroma.from_texts(
-        texts_chunks,
-        embeddings,
-        collection_name="financial_assistant_collection",        
-    )
-    vector_store.persist()
+    # Create a FAISS vector store without the `collection_name` argument
+    vector_store = FAISS.from_texts(texts_chunks, embeddings)
+    
     return vector_store
+
 
 # Function to fetch the top 3 finance-related news articles
 @st.cache_data(ttl=86400)  # Cache for 24 hours
