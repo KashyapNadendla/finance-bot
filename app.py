@@ -66,8 +66,7 @@ def create_vector_store(texts):
     vector_store = Chroma.from_texts(
         texts_chunks,
         embeddings,
-        collection_name="financial_assistant_collection",
-        persist_directory="chroma_db"
+        collection_name="financial_assistant_collection",        
     )
     vector_store.persist()
     return vector_store
