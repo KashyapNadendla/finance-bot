@@ -1,296 +1,3 @@
-# import streamlit as st
-# from openai import OpenAI
-# import os
-# import PyPDF2
-# from io import BytesIO
-# import yfinance as yf
-# from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from langchain.embeddings import OpenAIEmbeddings
-# from langchain.vectorstores import Chroma
-# from dotenv import load_dotenv
-# from newsapi import NewsApiClient
-# from datetime import datetime, timedelta
-
-# st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
-
-# # Load environment variables from the .env file
-# load_dotenv()
-# API_KEY = os.getenv("OPENAI_API_KEY")
-# NEWS_API_KEY = os.getenv("NEWS_API_KEY")  # Set up NEWS_API_KEY in .env
-
-# # Set up OpenAI client instance
-# client = OpenAI(api_key=API_KEY)
-# newsapi = NewsApiClient(api_key=NEWS_API_KEY)
-
-# # Initialize session state variables
-# if 'financial_data' not in st.session_state:
-#     st.session_state['financial_data'] = ''
-
-# if 'chat_history' not in st.session_state:
-#     st.session_state['chat_history'] = []
-
-# if 'vector_store' not in st.session_state:
-#     st.session_state['vector_store'] = None
-
-# # Function to load and process PDFs from the data folder with error handling
-# def load_and_process_pdfs(data_folder):
-#     pdf_texts = []
-#     for filename in os.listdir(data_folder):
-#         if filename.endswith('.pdf'):
-#             filepath = os.path.join(data_folder, filename)
-#             try:
-#                 with open(filepath, 'rb') as f:
-#                     reader = PyPDF2.PdfReader(f)
-#                     text = "".join([page.extract_text() or "" for page in reader.pages])
-#                     pdf_texts.append(text)
-#             except PyPDF2.errors.PdfReadError:
-#                 # Log instead of displaying a warning in the app
-#                 print(f"Warning: '{filename}' could not be processed (EOF marker not found). Skipping.")
-#             except Exception as e:
-#                 print(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
-#     return pdf_texts
-
-# # Function to create a vector store from texts
-# def create_vector_store(texts):
-#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-#     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
-
-#     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-#     vector_store = Chroma.from_texts(
-#         texts_chunks,
-#         embeddings,
-#         collection_name="financial_assistant_collection",
-#         persist_directory="chroma_db"
-#     )
-#     vector_store.persist()
-#     return vector_store
-
-# # Function to fetch the top 3 finance-related news articles
-# # def fetch_finance_news():
-# #     today = datetime.today().strftime('%Y-%m-%d')
-# #     news = newsapi.get_everything(
-# #         q="finance",
-# #         from_param=today,
-# #         language="en",
-# #         sort_by="relevancy",
-# #         page_size=3
-# #     )
-# #     articles = news['articles']
-
-
-# #     print(news, "ARTICLES", articles)
-# #     return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
-
-
-# def fetch_finance_news():
-#     today = datetime.today().strftime('%Y-%m-%d')
-#     last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')  # Date range for past week
-
-#     news = newsapi.get_everything(
-#         q="finance OR economy",
-#         from_param=last_week,
-#         to=today,
-#         language="en",
-#         sort_by="relevancy",
-#         page_size=3
-#     )
-#     articles = news.get('articles', [])
-#     return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
-
-
-# # Function to display the top finance news in Streamlit
-# def display_finance_news():
-#     st.subheader("Top 3 Finance News Articles Today")
-#     articles = fetch_finance_news()
-#     for i, article in enumerate(articles, 1):
-#         # Display the title as a clickable link
-#         st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
-#         st.write(f"Source: {article['source']}\n")
-
-# # Function to scout assets with real-time price action from Yahoo Finance
-# def scout_assets():
-#     tickers = [
-#         "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
-#         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
-#         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
-#         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
-#         "TMO", "MCD", "PM", "SHEL", "ABT", "NOW", "AXP", "MS", "TXN", "GE", "IBM", "QCOM", 
-#         "CAT", "ISRG", "DHR", "RY", "INTU", "VZ", "GS", "DIS", "AMGN", "PDD", "UBER", "HSBC", 
-#         "CMCSA", "NEE", "RTX", "ARM", "PFE", "T", "HDB", "UL", "AMAT", "SPGI", "BKNG", "LOW", 
-#         "TTE", "BLK", "PGR", "BHP", "UNP", "SYK", "BX", "ETN", "SNY", "HON", "SCHW", "LMT", 
-#         "TJX", "BUD", "ANET", "KKR", "MUFG", "BSX", "VRTX", "C", "COP", "ADP", "PANW", "MDT", 
-#         "MU", "UPS", "CB", "ADI", "NKE", "FI", "BA", "RIO", "DE", "SBUX", "IBN", "GILD", "MMC", 
-#         "SONY", "PLD", "BMY", "SHOP", "MELI", "UBS", "AMT", "REGN", "LRCX", "PLTR", "SO", "TD", 
-#         "ICE", "INTC", "ELV", "MDLZ", "HCA", "KLAC", "DELL", "SHW", "INFY", "ENB", "DUK", "SCCO", 
-#         "CI", "RELX", "EQIX", "ABNB", "WM", "WELL", "MO", "RACE", "TT", "PBR.A", "PBR", "CTAS", "SMFG", 
-#         "BN", "MCO", "APO", "ZTS", "GD", "APH", "SNPS", "GEV", "CEG", "CME", "PH", "AON", "CDNS", "SPOT", 
-#         "ITW", "PYPL", "CL", "BP", "CMG", "BTI", "USB", "MSI", "PNC", "CRWD", "NU", "TRI", "GSK", "TDG", "MAR", 
-#         "NOC", "SAN", "CP", "CNQ", "ECL", "MRVL", "CVS", "DEO", "APD", "MMM", "CNI", "EOG", "TGT", "BDX", 
-#         "EQNR", "ORLY", "FDX", "BMO", "FCX", "CARR", "CRH", "MCK", "CSX", "BNS", "WMB", "DASH", "COF", "EPD", 
-#         "WDAY", "NGG", "NXPI", "AJG", "EMR", "RSG", "ADSK", "AFL", "DLR", "FTNT", "TTD", "CM", "PSA", "ROP", 
-#         "JD", "MET", "HLT", "TFC", "APP", "NSC", "GM", "BBVA", "TRV", "SLB", "ET", "OKE", "SPG", "RCL", "ITUB", 
-#         "BK", "KMI", "PCAR", "DHI", "SE", "GWW", "NEM", "MFG", "URI", "ING", "SRE", "O", "MFC", "COIN", "NTES", 
-#         "FANG", "AEP", "MNST", "AZO", "JCI", "PAYX", "PSX", "CPRT", "MSTR", "ALL", "AMP", "TEAM", "FIS", "AIG", 
-#         "FICO", "D", "AMX", "MPC", "TRP", "SU", "E", "HMC", "CHTR", "CPNG", "OXY", "CCI", "LHX", "LEN", "ROST", 
-#         "ALC", "VALE", "TEL", "PWR", "WCN", "BCS", "CMI", "PRU", "MPLX", "SQ", "COR", "FAST", "MPWR", "KMB", 
-#         "KDP", "MSCI", "AEM", "PEG", "TAK", "HLN", "KVUE", "ODFL", "NDAQ", "DDOG", "PCG", "STZ", "LYG", "VST", 
-#         "CTVA", "TCOM", "VRT", "FLUT", "F", "EW", "HWM", "VLO", "HES", "LNG", "KHC", "MCHP", "KR", "IT", "SNOW", 
-#         "GEHC", "EXC", "CBRE", "NWG", "FERG", "EA", "GRMN", "IQV", "ACGL", "OTIS", "VRSK", "IR", "AME", "GLW", 
-#         "IMO", "DFS", "LVS", "STLA", "GIS", "A", "YUM", "DAL", "IRM", "LULU", "IDXX", "BKR", "MLM", "CTSH", 
-#         "TRGP", "VMC", "SYY", "ALNY", "HSY", "RMD", "ED", "HPQ", "ABEV", "XEL", "CCEP", "WIT", "GOLD", "EXR", 
-#         "DD", "VEEV", "DOW", "HEI", "ARES", "VICI", "NUE", "EFX", "ARGX", "AXON", "WAB", "AVB", "MTB", "DB", 
-#         "HIG", "SLF", "BIDU", "EIX", "HUM", "XYL", "ON", "EL", "CNC", "FMX", "NET", "EBAY", "WPM", "CVE", 
-#         "WEC", "RJF", "BRO", "ROK", "CSGP", "HEI.A", "WTW", "FITB", "WDS", "CHT", "BCE", "FER", "PPG", 
-#         "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
-#         "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
-#         "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
-#           "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
-#           "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
-#           "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
-#           "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
-    
-#     # List to store asset information
-#     asset_data = []
-    
-#     for ticker in tickers:
-#         stock = yf.Ticker(ticker)
-        
-#         try:
-#             # Fetch the latest data with a 1-day interval for the most recent price
-#             hist = stock.history(period="1d", interval="1m")
-            
-#             # Check if data was retrieved successfully
-#             if hist.empty:
-#                 continue  # Skip if no data found
-            
-#             # Get the most recent close price and calculate price change
-#             latest_close = hist['Close'].iloc[-1]
-#             open_price = hist['Close'].iloc[0]
-#             price_change_today = ((latest_close - open_price) / open_price) * 100
-            
-#             # Fetch additional details like dividend yield
-#             dividend_yield = stock.info.get("dividendYield", "N/A")
-            
-#             # Append data to the list
-#             asset_data.append({
-#                 "Ticker": ticker,
-#                 "Current Price": f"${latest_close:.2f}",
-#                 "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
-#                 "Price Change (Today)": f"{price_change_today:.2f}%"
-#             })
-        
-#         except Exception as e:
-#             # Log error to the console instead of showing it in the app
-#             print(f"Error retrieving data for {ticker}: {e}")
-    
-#     return asset_data
-
-
-# # UI Section for Processing Documents
-# st.header("Process Documents for Vector Store")
-# if st.button("Process Documents"):
-#     with st.spinner('Processing documents...'):
-#         data_folder = 'data'
-#         pdf_texts = load_and_process_pdfs(data_folder)
-#         if pdf_texts:
-#             st.session_state['vector_store'] = create_vector_store(pdf_texts)
-#             st.success("Documents processed and vector store created.")
-#         else:
-#             st.warning("No PDF documents found in the 'data' folder.")
-
-# # Display news articles in Streamlit
-# display_finance_news()
-
-# # Function to format asset suggestions as text
-# def format_asset_suggestions(suggestions):
-#     if not suggestions:
-#         return "No assets currently meet the criteria for recommendation."
-#     suggestion_text = "Here are some asset suggestions based on recent performance:\n\n"
-#     for asset in suggestions:
-#         suggestion_text += (
-#             f"**{asset['Ticker']}**\n"
-#             f"- Price Change (Today): {asset['Price Change (Today)']}\n"
-#             f"- Dividend Yield: {asset['Dividend Yield']}\n"
-#             f"- Current Price: {asset['Current Price']}\n\n"
-#         )
-#     return suggestion_text
-
-# def generate_response(financial_data, user_message, vector_store):
-#     # Always call scout_assets to get asset suggestions
-#     asset_suggestions = scout_assets()
-#     formatted_suggestions = format_asset_suggestions(asset_suggestions)
-
-#     # Generate the query and retrieve relevant documents
-#     query = financial_data + "\n" + user_message
-#     docs = vector_store.similarity_search(query, k=3)
-#     context = "\n".join([doc.page_content for doc in docs])
-
-#     # Construct the prompt with asset suggestions, document context, and user input
-#     prompt = f"""
-#     Based on the user's financial data, the following asset suggestions, and the context from documents:
-
-#     Financial Data:
-#     {financial_data}
-
-#     Asset Suggestions:
-#     {formatted_suggestions}
-
-#     Context from documents:
-#     {context}
-
-#     User Message:
-#     {user_message}
-
-#     Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data, asset suggestions, and the context from the documents in your response. Include Prices of top movers in Stocks based on the data you have.
-#     """
-
-#     # Generate response from OpenAI
-#     completion = client.chat.completions.create(
-#         model="gpt-4o-mini",
-#         messages=[
-#             {"role": "system", "content": "You are a financial assistant that provides advice based on the user's data and market trends. Always ensure that your advice is appropriate for the user's financial situation."},
-#             {"role": "user", "content": prompt}
-#         ]
-#     )
-#     response = completion.choices[0].message.content
-
-#     return response
-
-
-
-# # Section for Financial Data Input
-# st.header("Enter Your Financial Data")
-# with st.form("financial_data_form"):
-#     st.write("Please provide your financial data.")
-#     financial_data_input = st.text_area("Financial Data", value=st.session_state['financial_data'], height=200)
-#     submitted = st.form_submit_button("Submit")
-#     if submitted:
-#         st.session_state['financial_data'] = financial_data_input
-#         st.success("Financial data updated.")
-
-# # Chat Interface
-# st.header("Chat with Your Personal Finance Assistant")
-# for chat in st.session_state['chat_history']:
-#     with st.chat_message("assistant"):
-#         st.markdown(chat['bot'])
-#     with st.chat_message("user"):
-#         st.markdown(chat['user'])
-
-# # Get User Input
-# user_input = st.chat_input("You:")
-# if user_input:
-#     financial_data = st.session_state['financial_data']
-#     vector_store = st.session_state['vector_store']
-#     response = generate_response(financial_data, user_input, vector_store) if vector_store else "I'm sorry, but I couldn't access the knowledge base documents."
-#     st.session_state['chat_history'].append({"user": user_input, "bot": response})
-
-#     # Display latest messages
-#     with st.chat_message("user"):
-#         st.markdown(user_input)
-#     with st.chat_message("assistant"):
-#         st.markdown(response)
-
-
 import streamlit as st
 from openai import OpenAI
 import os
@@ -305,13 +12,16 @@ from datetime import datetime, timedelta
 import pandas as pd
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+import re  # Added for regular expression matching
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
 # Load environment variables from the .env file
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")  # Set up NEWS_API_KEY in .env
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")    # Set up NEWS_API_KEY in .env
+CMC_API_KEY = os.getenv("CMC_API_KEY")      # Added for CoinMarketCap API key
 
 # Set up OpenAI client instance
 client = OpenAI(api_key=API_KEY)
@@ -391,8 +101,7 @@ def display_finance_news():
 # Function to scout assets with real-time price action from Yahoo Finance
 @st.cache_data(ttl=600)
 def scout_assets():
-    tickers = [
-        "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
+    tickers = [ "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
@@ -426,11 +135,10 @@ def scout_assets():
         "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
         "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
         "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
-          "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
-          "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
-          "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
-          "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
-
+        "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
+        "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
+        "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
+        "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
 
     # Parallel processing with ThreadPoolExecutor
     def fetch_stock_data(ticker):
@@ -571,7 +279,7 @@ def generate_response(financial_data, user_message, vector_store):
 
     # Generate response from OpenAI
     completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a financial assistant that provides advice based on the user's data and market trends. Always ensure that your advice is appropriate for the user's financial situation."},
             {"role": "user", "content": prompt}
@@ -589,23 +297,59 @@ def chat_interface():
     for message in st.session_state['chat_history']:
         with st.chat_message(message['role']):
             st.markdown(message['content'])
+            # If there's a chart associated with this message, display it
+            if 'chart_data' in message:
+                st.line_chart(message['chart_data'])
 
     # Get User Input
     user_input = st.chat_input("You:")
     if user_input:
         financial_data = st.session_state['financial_data']
         vector_store = st.session_state['vector_store']
+
+        # Generate assistant's response
         response = generate_response(financial_data, user_input, vector_store)
 
-        # Add user message and assistant response to chat history
-        st.session_state['chat_history'].append({"role": "user", "content": user_input})
-        st.session_state['chat_history'].append({"role": "assistant", "content": response})
+        # Check if the user is asking for the price of an asset
+        chart_data = display_chart_for_asset(user_input)
 
-        # Display latest messages
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        with st.chat_message("assistant"):
-            st.markdown(response)
+        # Add user message to chat history
+        st.session_state['chat_history'].append({"role": "user", "content": user_input})
+
+        # Add assistant's message and chart data to chat history
+        assistant_message = {"role": "assistant", "content": response}
+        if chart_data is not None:
+            assistant_message['chart_data'] = chart_data
+        st.session_state['chat_history'].append(assistant_message)
+
+        # Display the last two messages (user and assistant)
+        for message in st.session_state['chat_history'][-2:]:
+            with st.chat_message(message['role']):
+                st.markdown(message['content'])
+                if 'chart_data' in message:
+                    st.line_chart(message['chart_data'])
+
+
+def display_chart_for_asset(message):
+    # Regular expression pattern to detect phrases like 'price of [ticker]' or 'chart of [ticker]'
+    pattern = r'\b(?:price|chart)\s+(?:of\s+)?([A-Za-z0-9.\-]+)\b'
+    matches = re.findall(pattern, message, re.IGNORECASE)
+    if matches:
+        ticker = matches[0].upper()
+        stock = yf.Ticker(ticker)
+        try:
+            hist = stock.history(period="1y")
+            if not hist.empty:
+                # Return the closing prices for plotting
+                return hist['Close']
+            else:
+                st.write(f"No data found for ticker {ticker}")
+                return None
+        except Exception as e:
+            st.write(f"Error retrieving data for {ticker}: {e}")
+            return None
+    else:
+        return None
 
 
 # Function for the budgeting tool
@@ -629,13 +373,53 @@ def budgeting_tool():
     else:
         st.error(f"Monthly Deficit: ${-savings:.2f}")
 
-# Function to get cryptocurrency prices
-def get_crypto_prices():
-    response = requests.get(
-        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
-    )
-    data = response.json()
-    return data
+# Function to get top movers within the top 500 coins
+def get_top_movers():
+    CMC_API_KEY = os.getenv("CMC_API_KEY")
+    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
+    parameters = {
+        'start': '1',
+        'limit': '500',  # Fetch top 500 coins by market cap
+        'convert': 'USD',
+        'sort': 'market_cap',
+        'sort_dir': 'desc'
+    }
+    headers = {
+        'Accepts': 'application/json',
+        'X-CMC_PRO_API_KEY': CMC_API_KEY,
+    }
+    session = requests.Session()
+    session.headers.update(headers)
+
+    try:
+        response = session.get(url, params=parameters)
+        data = json.loads(response.text)
+
+        # Extract the relevant data
+        crypto_data = []
+        for crypto in data['data']:
+            crypto_data.append({
+                'Name': crypto['name'],
+                'Symbol': crypto['symbol'],
+                'Price (USD)': crypto['quote']['USD']['price'],
+                '24h Change (%)': crypto['quote']['USD']['percent_change_24h']
+            })
+
+        # Sort the data by 24h Change (%) in descending order
+        crypto_data = sorted(crypto_data, key=lambda x: x['24h Change (%)'], reverse=True)
+
+        # Get top 10 movers
+        top_movers = crypto_data[:10]
+
+        # Format the prices and percentage changes
+        for item in top_movers:
+            item['Price (USD)'] = f"${item['Price (USD)']:.2f}"
+            item['24h Change (%)'] = f"{item['24h Change (%)']:.2f}%"
+
+        return top_movers
+    except (requests.ConnectionError, requests.Timeout, requests.TooManyRedirects) as e:
+        print(e)
+        return []
 
 # Main App
 
@@ -718,15 +502,16 @@ with tab2:
     display_assets()
     st.subheader("Asset Price Chart")
     display_asset_charts()
-    # st.subheader("Cryptocurrency Prices (USD)")
-    # crypto_data = get_crypto_prices()
-    # for crypto, info in crypto_data.items():
-    #     st.write(f"{crypto.capitalize()} Price: ${info['usd']}")
+    st.subheader("Top Cryptocurrency Movers (24h Change)")
+    crypto_data = get_top_movers()
+    if crypto_data:
+        df_crypto = pd.DataFrame(crypto_data)
+        st.dataframe(df_crypto)
+    else:
+        st.write("Failed to retrieve cryptocurrency prices.")
 
 with tab3:
     chat_interface()
 
 with tab4:
     budgeting_tool()
-
-
