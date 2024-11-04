@@ -5,15 +5,16 @@ import PyPDF2
 import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 from dotenv import load_dotenv
 from newsapi import NewsApiClient
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import re  # Added for regular expression matching
+from newsapi.newsapi_exception import NewsAPIException
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
@@ -60,48 +61,71 @@ def load_and_process_pdfs(data_folder):
     return pdf_texts
 
 # Function to create a vector store from texts
+# def create_vector_store(texts):
+#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+#     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
+
+#     embeddings = OpenAIEmbeddings(api_key=API_KEY)
+#     vector_store = FAISS.from_texts(
+#         texts_chunks,
+#         embeddings,
+#         collection_name="financial_assistant_collection",        
+#     )
+#     vector_store.persist()
+#     return vector_store
+
+
 def create_vector_store(texts):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
 
     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-    vector_store = Chroma.from_texts(
-        texts_chunks,
-        embeddings,
-        collection_name="financial_assistant_collection",
-        persist_directory="chroma_db"
-    )
-    vector_store.persist()
+    # Create a FAISS vector store without the `collection_name` argument
+    vector_store = FAISS.from_texts(texts_chunks, embeddings)
+    
     return vector_store
 
 # Function to fetch the top 3 finance-related news articles
+@st.cache_data(ttl=86400)  # Cache for 24 hours
 def fetch_finance_news():
-    today = datetime.today().strftime('%Y-%m-%d')
-    last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')
+    try:
+        today = datetime.today().strftime('%Y-%m-%d')
+        last_week = (datetime.today() - timedelta(days=7)).strftime('%Y-%m-%d')
 
-    news = newsapi.get_everything(
-        q="finance OR economy",
-        from_param=last_week,
-        to=today,
-        language="en",
-        sort_by="relevancy",
-        page_size=3
-    )
-    articles = news.get('articles', [])
-    return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+        news = newsapi.get_everything(
+            q="finance OR economy",
+            from_param=last_week,
+            to=today,
+            language="en",
+            sort_by="relevancy",
+            page_size=3
+        )
+        articles = news.get('articles', [])
+        return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
+    except NewsAPIException as e:
+        if 'rateLimited' in str(e):  # Check for rate limit error in exception message
+            st.warning("News API rate limit exceeded. Please try again later.")
+        else:
+            st.error("An error occurred while fetching news. Please try again later.")
+        return []
 
 # Function to display the top finance news in Streamlit
+# Display the finance news
 def display_finance_news():
     st.subheader("Top 3 Finance News Articles Today")
     articles = fetch_finance_news()
-    for i, article in enumerate(articles, 1):
-        st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
-        st.write(f"Source: {article['source']}\n")
+    if articles:
+        for i, article in enumerate(articles, 1):
+            st.markdown(f"[**{i}. {article['title']}**]({article['url']})")
+            st.write(f"Source: {article['source']}\n")
+    else:
+        st.write("No news articles available at this time.")
 
 # Function to scout assets with real-time price action from Yahoo Finance
 @st.cache_data(ttl=600)
 def scout_assets():
-    tickers = [ "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
+    tickers = [
+        "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
@@ -351,6 +375,18 @@ def display_chart_for_asset(message):
     else:
         return None
 
+        response = generate_response(financial_data, user_input, vector_store)
+
+        # Add user message and assistant response to chat history
+        st.session_state['chat_history'].append({"role": "user", "content": user_input})
+        st.session_state['chat_history'].append({"role": "assistant", "content": response})
+
+        # Display latest messages
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        with st.chat_message("assistant"):
+            st.markdown(response)
+
 
 # Function for the budgeting tool
 def budgeting_tool():
@@ -372,6 +408,7 @@ def budgeting_tool():
         st.success(f"Monthly Savings: ${savings:.2f}")
     else:
         st.error(f"Monthly Deficit: ${-savings:.2f}")
+
 
 # Function to get top movers within the top 500 coins
 def get_top_movers():
@@ -420,6 +457,15 @@ def get_top_movers():
     except (requests.ConnectionError, requests.Timeout, requests.TooManyRedirects) as e:
         print(e)
         return []
+
+# Function to get cryptocurrency prices
+def get_crypto_prices():
+    response = requests.get(
+        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
+    )
+    data = response.json()
+    return data
+
 
 # Main App
 
@@ -509,6 +555,7 @@ with tab2:
         st.dataframe(df_crypto)
     else:
         st.write("Failed to retrieve cryptocurrency prices.")
+
 
 with tab3:
     chat_interface()
