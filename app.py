@@ -430,7 +430,13 @@ def get_top_movers():
 
     try:
         response = session.get(url, params=parameters)
-        data = json.loads(response.text)
+        data = response.json()
+
+        # Check if the 'data' key is present in the response
+        if 'data' not in data:
+            st.error("Error: No data found in the response from CoinMarketCap.")
+            print("Response content:", data)  # Log the full response for debugging
+            return []
 
         # Extract the relevant data
         crypto_data = []
@@ -454,9 +460,16 @@ def get_top_movers():
             item['24h Change (%)'] = f"{item['24h Change (%)']:.2f}%"
 
         return top_movers
+
     except (requests.ConnectionError, requests.Timeout, requests.TooManyRedirects) as e:
+        st.error("Connection error while fetching cryptocurrency data. Please try again later.")
         print(e)
         return []
+    except json.JSONDecodeError as e:
+        st.error("Error parsing JSON response. Please check the API response format.")
+        print("JSON decode error:", e)
+        return []
+
 
 # Function to get cryptocurrency prices
 def get_crypto_prices():
