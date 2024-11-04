@@ -11,6 +11,8 @@ from newsapi import NewsApiClient
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
+import json
+import re  # Added for regular expression matching
 from newsapi.newsapi_exception import NewsAPIException
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -19,7 +21,8 @@ st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 # Load environment variables from the .env file
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")  # Set up NEWS_API_KEY in .env
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")    # Set up NEWS_API_KEY in .env
+CMC_API_KEY = os.getenv("CMC_API_KEY")      # Added for CoinMarketCap API key
 
 # Set up OpenAI client instance
 client = OpenAI(api_key=API_KEY)
@@ -81,7 +84,6 @@ def create_vector_store(texts):
     vector_store = FAISS.from_texts(texts_chunks, embeddings)
     
     return vector_store
-
 
 # Function to fetch the top 3 finance-related news articles
 @st.cache_data(ttl=86400)  # Cache for 24 hours
@@ -157,11 +159,10 @@ def scout_assets():
         "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
         "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
         "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
-          "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
-          "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
-          "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
-          "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
-
+        "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
+        "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
+        "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
+        "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
 
     # Parallel processing with ThreadPoolExecutor
     def fetch_stock_data(ticker):
@@ -302,7 +303,7 @@ def generate_response(financial_data, user_message, vector_store):
 
     # Generate response from OpenAI
     completion = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a financial assistant that provides advice based on the user's data and market trends. Always ensure that your advice is appropriate for the user's financial situation."},
             {"role": "user", "content": prompt}
@@ -320,12 +321,60 @@ def chat_interface():
     for message in st.session_state['chat_history']:
         with st.chat_message(message['role']):
             st.markdown(message['content'])
+            # If there's a chart associated with this message, display it
+            if 'chart_data' in message:
+                st.line_chart(message['chart_data'])
 
     # Get User Input
     user_input = st.chat_input("You:")
     if user_input:
         financial_data = st.session_state['financial_data']
         vector_store = st.session_state['vector_store']
+
+        # Generate assistant's response
+        response = generate_response(financial_data, user_input, vector_store)
+
+        # Check if the user is asking for the price of an asset
+        chart_data = display_chart_for_asset(user_input)
+
+        # Add user message to chat history
+        st.session_state['chat_history'].append({"role": "user", "content": user_input})
+
+        # Add assistant's message and chart data to chat history
+        assistant_message = {"role": "assistant", "content": response}
+        if chart_data is not None:
+            assistant_message['chart_data'] = chart_data
+        st.session_state['chat_history'].append(assistant_message)
+
+        # Display the last two messages (user and assistant)
+        for message in st.session_state['chat_history'][-2:]:
+            with st.chat_message(message['role']):
+                st.markdown(message['content'])
+                if 'chart_data' in message:
+                    st.line_chart(message['chart_data'])
+
+
+def display_chart_for_asset(message):
+    # Regular expression pattern to detect phrases like 'price of [ticker]' or 'chart of [ticker]'
+    pattern = r'\b(?:price|chart)\s+(?:of\s+)?([A-Za-z0-9.\-]+)\b'
+    matches = re.findall(pattern, message, re.IGNORECASE)
+    if matches:
+        ticker = matches[0].upper()
+        stock = yf.Ticker(ticker)
+        try:
+            hist = stock.history(period="1y")
+            if not hist.empty:
+                # Return the closing prices for plotting
+                return hist['Close']
+            else:
+                st.write(f"No data found for ticker {ticker}")
+                return None
+        except Exception as e:
+            st.write(f"Error retrieving data for {ticker}: {e}")
+            return None
+    else:
+        return None
+
         response = generate_response(financial_data, user_input, vector_store)
 
         # Add user message and assistant response to chat history
@@ -360,6 +409,55 @@ def budgeting_tool():
     else:
         st.error(f"Monthly Deficit: ${-savings:.2f}")
 
+
+# Function to get top movers within the top 500 coins
+def get_top_movers():
+    CMC_API_KEY = os.getenv("CMC_API_KEY")
+    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
+    parameters = {
+        'start': '1',
+        'limit': '500',  # Fetch top 500 coins by market cap
+        'convert': 'USD',
+        'sort': 'market_cap',
+        'sort_dir': 'desc'
+    }
+    headers = {
+        'Accepts': 'application/json',
+        'X-CMC_PRO_API_KEY': CMC_API_KEY,
+    }
+    session = requests.Session()
+    session.headers.update(headers)
+
+    try:
+        response = session.get(url, params=parameters)
+        data = json.loads(response.text)
+
+        # Extract the relevant data
+        crypto_data = []
+        for crypto in data['data']:
+            crypto_data.append({
+                'Name': crypto['name'],
+                'Symbol': crypto['symbol'],
+                'Price (USD)': crypto['quote']['USD']['price'],
+                '24h Change (%)': crypto['quote']['USD']['percent_change_24h']
+            })
+
+        # Sort the data by 24h Change (%) in descending order
+        crypto_data = sorted(crypto_data, key=lambda x: x['24h Change (%)'], reverse=True)
+
+        # Get top 10 movers
+        top_movers = crypto_data[:10]
+
+        # Format the prices and percentage changes
+        for item in top_movers:
+            item['Price (USD)'] = f"${item['Price (USD)']:.2f}"
+            item['24h Change (%)'] = f"{item['24h Change (%)']:.2f}%"
+
+        return top_movers
+    except (requests.ConnectionError, requests.Timeout, requests.TooManyRedirects) as e:
+        print(e)
+        return []
+
 # Function to get cryptocurrency prices
 def get_crypto_prices():
     response = requests.get(
@@ -367,6 +465,7 @@ def get_crypto_prices():
     )
     data = response.json()
     return data
+
 
 # Main App
 
@@ -449,10 +548,14 @@ with tab2:
     display_assets()
     st.subheader("Asset Price Chart")
     display_asset_charts()
-    # st.subheader("Cryptocurrency Prices (USD)")
-    # crypto_data = get_crypto_prices()
-    # for crypto, info in crypto_data.items():
-    #     st.write(f"{crypto.capitalize()} Price: ${info['usd']}")
+    st.subheader("Top Cryptocurrency Movers (24h Change)")
+    crypto_data = get_top_movers()
+    if crypto_data:
+        df_crypto = pd.DataFrame(crypto_data)
+        st.dataframe(df_crypto)
+    else:
+        st.write("Failed to retrieve cryptocurrency prices.")
+
 
 with tab3:
     chat_interface()
