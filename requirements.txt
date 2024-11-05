@@ -15,3 +15,5 @@ faiss-cpu
 tiktoken
 pandas
 requests
+matplotlib
+numpy
