@@ -21,8 +21,8 @@ st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 # Load environment variables from the .env file
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")    # Set up NEWS_API_KEY in .env
-CMC_API_KEY = os.getenv("CMC_API_KEY")      # Added for CoinMarketCap API key
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")    
+CMC_API_KEY = os.getenv("CMC_API_KEY")      
 
 # Set up OpenAI client instance
 client = OpenAI(api_key=API_KEY)
@@ -60,20 +60,6 @@ def load_and_process_pdfs(data_folder):
                 print(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
     return pdf_texts
 
-# Function to create a vector store from texts
-# def create_vector_store(texts):
-#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-#     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
-
-#     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-#     vector_store = FAISS.from_texts(
-#         texts_chunks,
-#         embeddings,
-#         collection_name="financial_assistant_collection",        
-#     )
-#     vector_store.persist()
-#     return vector_store
-
 
 def create_vector_store(texts):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
@@ -85,7 +71,7 @@ def create_vector_store(texts):
     
     return vector_store
 
-# Function to fetch the top 3 finance-related news articles
+# Function to fetch the top 5 finance-related news articles
 @st.cache_data(ttl=86400)  # Cache for 24 hours
 def fetch_finance_news():
     try:
@@ -98,7 +84,7 @@ def fetch_finance_news():
             to=today,
             language="en",
             sort_by="relevancy",
-            page_size=3
+            page_size=5
         )
         articles = news.get('articles', [])
         return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
@@ -112,7 +98,7 @@ def fetch_finance_news():
 # Function to display the top finance news in Streamlit
 # Display the finance news
 def display_finance_news():
-    st.subheader("Top 3 Finance News Articles Today")
+    st.subheader("Top 5 Finance News Articles Today")
     articles = fetch_finance_news()
     if articles:
         for i, article in enumerate(articles, 1):
@@ -123,9 +109,81 @@ def display_finance_news():
 
 # Function to scout assets with real-time price action from Yahoo Finance
 @st.cache_data(ttl=600)
+# def scout_assets():
+#     tickers = [
+#         "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
+#         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
+#         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
+#         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
+#         "TMO", "MCD", "PM", "SHEL", "ABT", "NOW", "AXP", "MS", "TXN", "GE", "IBM", "QCOM", 
+#         "CAT", "ISRG", "DHR", "RY", "INTU", "VZ", "GS", "DIS", "AMGN", "PDD", "UBER", "HSBC", 
+#         "CMCSA", "NEE", "RTX", "ARM", "PFE", "T", "HDB", "UL", "AMAT", "SPGI", "BKNG", "LOW", 
+#         "TTE", "BLK", "PGR", "BHP", "UNP", "SYK", "BX", "ETN", "SNY", "HON", "SCHW", "LMT", 
+#         "TJX", "BUD", "ANET", "KKR", "MUFG", "BSX", "VRTX", "C", "COP", "ADP", "PANW", "MDT", 
+#         "MU", "UPS", "CB", "ADI", "NKE", "FI", "BA", "RIO", "DE", "SBUX", "IBN", "GILD", "MMC", 
+#         "SONY", "PLD", "BMY", "SHOP", "MELI", "UBS", "AMT", "REGN", "LRCX", "PLTR", "SO", "TD", 
+#         "ICE", "INTC", "ELV", "MDLZ", "HCA", "KLAC", "DELL", "SHW", "INFY", "ENB", "DUK", "SCCO", 
+#         "CI", "RELX", "EQIX", "ABNB", "WM", "WELL", "MO", "RACE", "TT", "PBR.A", "PBR", "CTAS", "SMFG", 
+#         "BN", "MCO", "APO", "ZTS", "GD", "APH", "SNPS", "GEV", "CEG", "CME", "PH", "AON", "CDNS", "SPOT", 
+#         "ITW", "PYPL", "CL", "BP", "CMG", "BTI", "USB", "MSI", "PNC", "CRWD", "NU", "TRI", "GSK", "TDG", "MAR", 
+#         "NOC", "SAN", "CP", "CNQ", "ECL", "MRVL", "CVS", "DEO", "APD", "MMM", "CNI", "EOG", "TGT", "BDX", 
+#         "EQNR", "ORLY", "FDX", "BMO", "FCX", "CARR", "CRH", "MCK", "CSX", "BNS", "WMB", "DASH", "COF", "EPD", 
+#         "WDAY", "NGG", "NXPI", "AJG", "EMR", "RSG", "ADSK", "AFL", "DLR", "FTNT", "TTD", "CM", "PSA", "ROP", 
+#         "JD", "MET", "HLT", "TFC", "APP", "NSC", "GM", "BBVA", "TRV", "SLB", "ET", "OKE", "SPG", "RCL", "ITUB", 
+#         "BK", "KMI", "PCAR", "DHI", "SE", "GWW", "NEM", "MFG", "URI", "ING", "SRE", "O", "MFC", "COIN", "NTES", 
+#         "FANG", "AEP", "MNST", "AZO", "JCI", "PAYX", "PSX", "CPRT", "MSTR", "ALL", "AMP", "TEAM", "FIS", "AIG", 
+#         "FICO", "D", "AMX", "MPC", "TRP", "SU", "E", "HMC", "CHTR", "CPNG", "OXY", "CCI", "LHX", "LEN", "ROST", 
+#         "ALC", "VALE", "TEL", "PWR", "WCN", "BCS", "CMI", "PRU", "MPLX", "SQ", "COR", "FAST", "MPWR", "KMB", 
+#         "KDP", "MSCI", "AEM", "PEG", "TAK", "HLN", "KVUE", "ODFL", "NDAQ", "DDOG", "PCG", "STZ", "LYG", "VST", 
+#         "CTVA", "TCOM", "VRT", "FLUT", "F", "EW", "HWM", "VLO", "HES", "LNG", "KHC", "MCHP", "KR", "IT", "SNOW", 
+#         "GEHC", "EXC", "CBRE", "NWG", "FERG", "EA", "GRMN", "IQV", "ACGL", "OTIS", "VRSK", "IR", "AME", "GLW", 
+#         "IMO", "DFS", "LVS", "STLA", "GIS", "A", "YUM", "DAL", "IRM", "LULU", "IDXX", "BKR", "MLM", "CTSH", 
+#         "TRGP", "VMC", "SYY", "ALNY", "HSY", "RMD", "ED", "HPQ", "ABEV", "XEL", "CCEP", "WIT", "GOLD", "EXR", 
+#         "DD", "VEEV", "DOW", "HEI", "ARES", "VICI", "NUE", "EFX", "ARGX", "AXON", "WAB", "AVB", "MTB", "DB", 
+#         "HIG", "SLF", "BIDU", "EIX", "HUM", "XYL", "ON", "EL", "CNC", "FMX", "NET", "EBAY", "WPM", "CVE", 
+#         "WEC", "RJF", "BRO", "ROK", "CSGP", "HEI.A", "WTW", "FITB", "WDS", "CHT", "BCE", "FER", "PPG", 
+#         "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
+#         "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
+#         "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
+#         "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
+#         "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
+#         "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
+#         "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
+
+    # # Parallel processing with ThreadPoolExecutor
+    # def fetch_stock_data(ticker):
+    #     stock = yf.Ticker(ticker)
+    #     try:
+    #         hist = stock.history(period="1d", interval="1m")
+    #         if hist.empty:
+    #             return None  # Skip if no data found
+
+    #         latest_close = hist['Close'].iloc[-1]
+    #         open_price = hist['Close'].iloc[0]
+    #         price_change_today = ((latest_close - open_price) / open_price) * 100
+    #         dividend_yield = stock.info.get("dividendYield", "N/A")
+
+    #         return {
+    #             "Ticker": ticker,
+    #             "Current Price": f"${latest_close:.2f}",
+    #             "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
+    #             "Price Change (Today)": f"{price_change_today:.2f}%"
+    #         }
+    #     except Exception as e:
+    #         print(f"Error retrieving data for {ticker}: {e}")
+    #         return None
+
+    # asset_data = []
+    # with ThreadPoolExecutor(max_workers=10) as executor:
+    #     futures = {executor.submit(fetch_stock_data, ticker): ticker for ticker in tickers}
+    #     for future in as_completed(futures):
+    #         result = future.result()
+    #         if result:
+    #             asset_data.append(result)
+
+    # return asset_data
 def scout_assets():
-    tickers = [
-        "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
+    tickers = ["AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
@@ -163,41 +221,68 @@ def scout_assets():
         "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
         "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
         "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
+    period = "1mo"
+    interval = "1d"
 
-    # Parallel processing with ThreadPoolExecutor
-    def fetch_stock_data(ticker):
+    asset_data = []
+
+    for ticker in tickers:
         stock = yf.Ticker(ticker)
         try:
-            hist = stock.history(period="1d", interval="1m")
+            hist = stock.history(period=period, interval=interval)
             if hist.empty:
-                return None  # Skip if no data found
+                st.warning(f"No data found for ticker {ticker}.")
+                continue
 
             latest_close = hist['Close'].iloc[-1]
-            open_price = hist['Close'].iloc[0]
+            open_price = hist['Open'].iloc[-1]
             price_change_today = ((latest_close - open_price) / open_price) * 100
             dividend_yield = stock.info.get("dividendYield", "N/A")
 
-            return {
+            asset_data.append({
                 "Ticker": ticker,
                 "Current Price": f"${latest_close:.2f}",
                 "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
                 "Price Change (Today)": f"{price_change_today:.2f}%"
-            }
+            })
         except Exception as e:
-            print(f"Error retrieving data for {ticker}: {e}")
-            return None
+            st.error(f"Error retrieving data for {ticker}: {e}")
+            continue
 
-    asset_data = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(fetch_stock_data, ticker): ticker for ticker in tickers}
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                asset_data.append(result)
+    if not asset_data:
+        st.error("No asset data could be fetched. Please try again later.")
 
     return asset_data
 
-# Function to display assets in a table with user preferences
+# # Function to display assets in a table with user preferences
+# def display_assets():
+#     st.header("Asset Data")
+#     if 'preferred_assets' not in st.session_state:
+#         st.session_state['preferred_assets'] = []
+
+#     # Check if asset data is available
+#     if st.session_state['asset_data']:
+#         asset_data = st.session_state['asset_data']
+#         df = pd.DataFrame(asset_data)
+#         st.dataframe(df)
+
+#         # Allow user to select preferred assets
+#         tickers = df['Ticker'].tolist()
+#         selected_assets = st.multiselect(
+#             "Select your preferred assets",
+#             tickers,
+#             default=st.session_state['preferred_assets']
+#         )
+#         st.session_state['preferred_assets'] = selected_assets
+
+#         if selected_assets:
+#             st.write("Your preferred assets:")
+#             preferred_df = df[df['Ticker'].isin(selected_assets)]
+#             st.dataframe(preferred_df)
+#             check_price_alerts()
+#     else:
+#         st.info("Asset data not loaded. Click 'Update Stock Prices' to load.")
+
 def display_assets():
     st.header("Asset Data")
     if 'preferred_assets' not in st.session_state:
@@ -207,10 +292,36 @@ def display_assets():
     if st.session_state['asset_data']:
         asset_data = st.session_state['asset_data']
         df = pd.DataFrame(asset_data)
-        st.dataframe(df)
 
-        # Allow user to select preferred assets
-        tickers = df['Ticker'].tolist()
+        # Convert 'Current Price' to numeric values for filtering
+        df['Current Price'] = df['Current Price'].replace('[\$,]', '', regex=True).astype(float)
+
+        # Add input fields for price range selection
+        min_price = st.number_input(
+            "Minimum Stock Price ($)",
+            min_value=0.0,
+            value=0.0,
+            step=1.0
+        )
+        max_price = st.number_input(
+            "Maximum Stock Price ($)",
+            min_value=0.0,
+            value=1000.0,
+            step=1.0
+        )
+        # After filtering the DataFrame
+        df_filtered = df[(df['Current Price'] >= min_price) & (df['Current Price'] <= max_price)]
+
+        # Store the filtered DataFrame in session state for use in other functions
+        st.session_state['df_filtered'] = df_filtered
+
+        # Filter the DataFrame based on the selected price range
+        df_filtered = df[(df['Current Price'] >= min_price) & (df['Current Price'] <= max_price)]
+
+        st.dataframe(df_filtered)
+
+        # Allow user to select preferred assets from the filtered list
+        tickers = df_filtered['Ticker'].tolist()
         selected_assets = st.multiselect(
             "Select your preferred assets",
             tickers,
@@ -220,14 +331,32 @@ def display_assets():
 
         if selected_assets:
             st.write("Your preferred assets:")
-            preferred_df = df[df['Ticker'].isin(selected_assets)]
+            preferred_df = df_filtered[df_filtered['Ticker'].isin(selected_assets)]
             st.dataframe(preferred_df)
-            check_price_alerts()
+            check_price_alerts(df_filtered)
     else:
         st.info("Asset data not loaded. Click 'Update Stock Prices' to load.")
 
-# Function to check for price alerts
-def check_price_alerts():
+
+# # Function to check for price alerts
+# def check_price_alerts():
+#     if 'preferred_assets' in st.session_state and st.session_state['preferred_assets']:
+#         alert_threshold = st.slider(
+#             "Set price change alert threshold (%)",
+#             min_value=0.0,
+#             max_value=10.0,
+#             value=5.0
+#         )
+#         if st.session_state['asset_data']:
+#             asset_data = st.session_state['asset_data']
+#             for asset in asset_data:
+#                 if asset['Ticker'] in st.session_state['preferred_assets']:
+#                     price_change = float(asset['Price Change (Today)'].strip('%'))
+#                     if abs(price_change) >= alert_threshold:
+#                         st.warning(f"Alert: {asset['Ticker']} has changed by {price_change:.2f}% today!")
+#         else:
+#             st.info("Asset data not loaded. Please update stock prices to check price alerts.")
+def check_price_alerts(df_filtered):
     if 'preferred_assets' in st.session_state and st.session_state['preferred_assets']:
         alert_threshold = st.slider(
             "Set price change alert threshold (%)",
@@ -235,15 +364,12 @@ def check_price_alerts():
             max_value=10.0,
             value=5.0
         )
-        if st.session_state['asset_data']:
-            asset_data = st.session_state['asset_data']
-            for asset in asset_data:
-                if asset['Ticker'] in st.session_state['preferred_assets']:
-                    price_change = float(asset['Price Change (Today)'].strip('%'))
-                    if abs(price_change) >= alert_threshold:
-                        st.warning(f"Alert: {asset['Ticker']} has changed by {price_change:.2f}% today!")
-        else:
-            st.info("Asset data not loaded. Please update stock prices to check price alerts.")
+        for _, asset in df_filtered.iterrows():
+            if asset['Ticker'] in st.session_state['preferred_assets']:
+                price_change = float(asset['Price Change (Today)'].strip('%'))
+                if abs(price_change) >= alert_threshold:
+                    st.warning(f"Alert: {asset['Ticker']} has changed by {price_change:.2f}% today!")
+
 
 # Function to display asset charts
 def display_asset_charts():
@@ -258,26 +384,79 @@ def display_asset_charts():
         st.info("Asset data not loaded. Please update stock prices to view charts.")
 
 # Function to format asset suggestions as text
+# def format_asset_suggestions(suggestions):
+#     if not suggestions:
+#         return "No assets currently meet the criteria for recommendation."
+#     suggestion_text = "Here are some asset suggestions based on recent performance:\n\n"
+#     for asset in suggestions:
+#         suggestion_text += (
+#             f"**{asset['Ticker']}**\n"
+#             f"- Price Change (Today): {asset['Price Change (Today)']}\n"
+#             f"- Dividend Yield: {asset['Dividend Yield']}\n"
+#             f"- Current Price: {asset['Current Price']}\n\n"
+#         )
+#     return suggestion_text
 def format_asset_suggestions(suggestions):
     if not suggestions:
         return "No assets currently meet the criteria for recommendation."
-    suggestion_text = "Here are some asset suggestions based on recent performance:\n\n"
-    for asset in suggestions:
+    suggestion_text = "Here are some asset suggestions based on your criteria:\n\n"
+    for _, asset in suggestions.iterrows():
         suggestion_text += (
             f"**{asset['Ticker']}**\n"
             f"- Price Change (Today): {asset['Price Change (Today)']}\n"
             f"- Dividend Yield: {asset['Dividend Yield']}\n"
-            f"- Current Price: {asset['Current Price']}\n\n"
+            f"- Current Price: ${asset['Current Price']:.2f}\n\n"
         )
     return suggestion_text
 
-# Function to generate response from OpenAI
-def generate_response(financial_data, user_message, vector_store):
-    if st.session_state['asset_data']:
-        asset_suggestions = st.session_state['asset_data']
-        formatted_suggestions = format_asset_suggestions(asset_suggestions)
+
+# # Function to generate response from OpenAI
+# def generate_response(financial_data, user_message, vector_store):
+#     if st.session_state['asset_data']:
+#         asset_suggestions = st.session_state['asset_data']
+#         formatted_suggestions = format_asset_suggestions(asset_suggestions)
+#     else:
+#         formatted_suggestions = "No asset data available."
+
+#     query = financial_data + "\n" + user_message
+#     docs = vector_store.similarity_search(query, k=3) if vector_store else []
+#     context = "\n".join([doc.page_content for doc in docs])
+
+#     prompt = f"""
+#     Based on the user's financial data, the following asset suggestions, and the context from documents:
+
+#     Financial Data:
+#     {financial_data}
+
+#     Asset Suggestions:
+#     {formatted_suggestions}
+
+#     Context from documents:
+#     {context}
+
+#     User Message:
+#     {user_message}
+
+#     Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data, asset suggestions, and the context from the documents in your response. Include prices of top movers in stocks based on the data you have.
+#     """
+
+#     # Generate response from OpenAI
+#     completion = client.chat.completions.create(
+#         model="gpt-4o",
+#         messages=[
+#             {"role": "system", "content": "You are a financial assistant that provides advice based on the user's data and market trends. Always ensure that your advice is appropriate for the user's financial situation."},
+#             {"role": "user", "content": prompt}
+#         ]
+#     )
+#     response = completion.choices[0].message.content
+
+#     return response
+
+def generate_response(financial_data, user_message, vector_store, df_filtered):
+    if not df_filtered.empty:
+        formatted_suggestions = format_asset_suggestions(df_filtered)
     else:
-        formatted_suggestions = "No asset data available."
+        formatted_suggestions = "No asset data available within the specified price range."
 
     query = financial_data + "\n" + user_message
     docs = vector_store.similarity_search(query, k=3) if vector_store else []
@@ -313,7 +492,46 @@ def generate_response(financial_data, user_message, vector_store):
 
     return response
 
-# Function to handle the chat interface
+
+# # Function to handle the chat interface
+# def chat_interface():
+#     st.header("Chat with Your Personal Finance Assistant")
+
+#     # Display the chat messages in order
+#     for message in st.session_state['chat_history']:
+#         with st.chat_message(message['role']):
+#             st.markdown(message['content'])
+#             # If there's a chart associated with this message, display it
+#             if 'chart_data' in message:
+#                 st.line_chart(message['chart_data'])
+
+#     # Get User Input
+#     user_input = st.chat_input("You:")
+#     if user_input:
+#         financial_data = st.session_state['financial_data']
+#         vector_store = st.session_state['vector_store']
+
+#         # Generate assistant's response
+#         response = generate_response(financial_data, user_input, vector_store)
+
+#         # Check if the user is asking for the price of an asset
+#         chart_data = display_chart_for_asset(user_input)
+
+#         # Add user message to chat history
+#         st.session_state['chat_history'].append({"role": "user", "content": user_input})
+
+#         # Add assistant's message and chart data to chat history
+#         assistant_message = {"role": "assistant", "content": response}
+#         if chart_data is not None:
+#             assistant_message['chart_data'] = chart_data
+#         st.session_state['chat_history'].append(assistant_message)
+
+#         # Display the last two messages (user and assistant)
+#         for message in st.session_state['chat_history'][-2:]:
+#             with st.chat_message(message['role']):
+#                 st.markdown(message['content'])
+#                 if 'chart_data' in message:
+#                     st.line_chart(message['chart_data'])
 def chat_interface():
     st.header("Chat with Your Personal Finance Assistant")
 
@@ -331,8 +549,14 @@ def chat_interface():
         financial_data = st.session_state['financial_data']
         vector_store = st.session_state['vector_store']
 
+        # Get the filtered assets based on the price range from display_assets()
+        if 'df_filtered' in st.session_state:
+            df_filtered = st.session_state['df_filtered']
+        else:
+            df_filtered = pd.DataFrame()
+
         # Generate assistant's response
-        response = generate_response(financial_data, user_input, vector_store)
+        response = generate_response(financial_data, user_input, vector_store, df_filtered)
 
         # Check if the user is asking for the price of an asset
         chart_data = display_chart_for_asset(user_input)
