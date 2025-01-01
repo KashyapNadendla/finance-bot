@@ -17,6 +17,9 @@ import json
 import re  # Added for regular expression matching
 from newsapi.newsapi_exception import NewsAPIException
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import pandas_ta as ta
+import tweepy
+import math
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
@@ -62,19 +65,7 @@ def load_and_process_pdfs(data_folder):
                 print(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
     return pdf_texts
 
-# Function to create a vector store from texts
-# def create_vector_store(texts):
-#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-#     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
 
-#     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-#     vector_store = FAISS.from_texts(
-#         texts_chunks,
-#         embeddings,
-#         collection_name="financial_assistant_collection",        
-#     )
-#     vector_store.persist()
-#     return vector_store
 
 
 def create_vector_store(texts):
@@ -154,50 +145,170 @@ def scout_assets():
         "CTVA", "TCOM", "VRT", "FLUT", "F", "EW", "HWM", "VLO", "HES", "LNG", "KHC", "MCHP", "KR", "IT", "SNOW", 
         "GEHC", "EXC", "CBRE", "NWG", "FERG", "EA", "GRMN", "IQV", "ACGL", "OTIS", "VRSK", "IR", "AME", "GLW", 
         "IMO", "DFS", "LVS", "STLA", "GIS", "A", "YUM", "DAL", "IRM", "LULU", "IDXX", "BKR", "MLM", "CTSH", 
-        "TRGP", "VMC", "SYY", "ALNY", "HSY", "RMD", "ED", "HPQ", "ABEV", "XEL", "CCEP", "WIT", "GOLD", "EXR", 
-        "DD", "VEEV", "DOW", "HEI", "ARES", "VICI", "NUE", "EFX", "ARGX", "AXON", "WAB", "AVB", "MTB", "DB", 
-        "HIG", "SLF", "BIDU", "EIX", "HUM", "XYL", "ON", "EL", "CNC", "FMX", "NET", "EBAY", "WPM", "CVE", 
-        "WEC", "RJF", "BRO", "ROK", "CSGP", "HEI.A", "WTW", "FITB", "WDS", "CHT", "BCE", "FER", "PPG", 
-        "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
-        "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
-        "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
-        "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
-        "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
-        "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
-        "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
-
+        "TRGP", "VMC", "SYY", "ALNY"]
+    period = "1mo"
+    interval = "1d"
+## removed for testing "","HSY", "RMD", "ED", "HPQ", "ABEV", "XEL", "CCEP", "WIT", "GOLD", "EXR", 
+        # "DD", "VEEV", "DOW", "HEI", "ARES", "VICI", "NUE", "EFX", "ARGX", "AXON", "WAB", "AVB", "MTB", "DB", 
+        # "HIG", "SLF", "BIDU", "EIX", "HUM", "XYL", "ON", "EL", "CNC", "FMX", "NET", "EBAY", "WPM", "CVE", 
+        # "WEC", "RJF", "BRO", "ROK", "CSGP", "HEI.A", "WTW", "FITB", "WDS", "CHT", "BCE", "FER", "PPG", 
+        # "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
+        # "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
+        # "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
+        # "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
+        # "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
+       # "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
+       # "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC""
     # Parallel processing with ThreadPoolExecutor
+    # def fetch_stock_data(ticker):
+    #     stock = yf.Ticker(ticker)
+    #     try:
+    #         hist = stock.history(period="1mo", interval="1d")
+    #         if hist.empty:
+    #             return None  # Skip if no data found
+
+    #         latest_close = hist['Close'].iloc[-1]
+    #         open_price = hist['Close'].iloc[0]
+    #         price_change_today = ((latest_close - open_price) / open_price) * 100
+    #         dividend_yield = stock.info.get("dividendYield", "N/A")
+
+    #         return {
+    #             "Ticker": ticker,
+    #             "Current Price": f"${latest_close:.2f}",
+    #             "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
+    #             "Price Change (Today)": f"{price_change_today:.2f}%"
+    #         }
+    #     except Exception as e:
+    #         print(f"Error retrieving data for {ticker}: {e}")
+    #         return None
+
+    # asset_data = []
+    # with ThreadPoolExecutor(max_workers=10) as executor:
+    #     futures = {executor.submit(fetch_stock_data, ticker): ticker for ticker in tickers}
+    #     for future in as_completed(futures):
+    #         result = future.result()
+    #         if result:
+    #             asset_data.append(result)
+
+    # return asset_data
+    
+
+
+
+    def get_social_popularity(ticker: str, max_tweets: int = 50) -> float:
+        """
+        Fetches recent tweets mentioning the given ticker symbol and calculates a
+        simple popularity score.
+    
+        Arguments:
+        ----------
+        ticker : str
+            The stock ticker to search for on Twitter (e.g. "TSLA")
+        max_tweets : int
+            The maximum number of tweets to retrieve for scoring.
+    
+        Returns:
+        --------
+        float
+            A popularity score where a higher value indicates higher popularity.
+            Returns 0 if no tweets found or an error occurs.
+    """
+    # 1. Get the bearer token from environment variable
+    bearer_token = os.getenv("TWITTER_BEARER_TOKEN")
+    if not bearer_token:
+        print("Error: Missing TWITTER_BEARER_TOKEN in .env file.")
+        return 0.0
+    
+    try:
+        # 2. Initialize Tweepy with OAuth2 Bearer Token
+        auth = tweepy.OAuth2BearerHandler(bearer_token)
+        api = tweepy.API(auth)
+
+        # 3. Construct a query. Searching for $TSLA can help find tweets mentioning the ticker.
+        #    The "recent" search might not be the same as v1.1 "search_tweets", 
+        #    but for demonstration, we'll use this approach. 
+        #    If you're using Twitter API v2 or another endpoint, adjustments are needed.
+        query = f"${ticker} -is:retweet"
+
+        # 4. Search tweets using the old v1.1 endpoint "search_tweets":
+        #    * If you're using Twitter API v2, you'll use the new client / search_recent_tweets etc.
+        tweets = api.search_tweets(q=query, count=max_tweets, tweet_mode="extended")
+
+        if not tweets:
+            return 0.0  # No tweets found => 0 popularity
+
+        # 5. Compute a naive popularity score
+        #    For instance, we can sum the tweet's favorite_count + retweet_count,
+        #    or simply count how many tweets we got. 
+        #    You can add weight if you want to emphasize likes more than retweets, etc.
+        popularity_score = 0
+        for tweet in tweets:
+            # v1.1 typical fields:
+            #   tweet.favorite_count
+            #   tweet.retweet_count
+            #   tweet.full_text
+            popularity_score += tweet.favorite_count + tweet.retweet_count
+
+        # 6. Optional: Transform the raw sum into a scale (e.g., 0 - 100)
+        #    For demonstration, let's do a log scale so that a few giant tweets
+        #    won't overshadow everything.
+        if popularity_score > 0:
+            popularity_score = math.log2(popularity_score + 1) * 10
+        else:
+            # If no retweets/likes, just use the tweet count.
+            popularity_score = len(tweets)
+
+        return popularity_score
+
+    except tweepy.TweepyException as e:
+        print(f"Tweepy error: {e}")
+        return 0.0
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return 0.0
+    
     def fetch_stock_data(ticker):
         stock = yf.Ticker(ticker)
         try:
-            hist = stock.history(period="1d", interval="1m")
+            hist = stock.history(period=period, interval=interval)
             if hist.empty:
-                return None  # Skip if no data found
+                st.warning(f"No data for {ticker}.")
+                return None
 
             latest_close = hist['Close'].iloc[-1]
-            open_price = hist['Close'].iloc[0]
+            open_price = hist['Open'].iloc[-1]
             price_change_today = ((latest_close - open_price) / open_price) * 100
-            dividend_yield = stock.info.get("dividendYield", "N/A")
+
+            # Calculate TA signals
+            signal, reason = calculate_technical_indicators(ticker, period, interval)
+            #popularity_score = get_social_popularity(ticker)
 
             return {
                 "Ticker": ticker,
                 "Current Price": f"${latest_close:.2f}",
-                "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
-                "Price Change (Today)": f"{price_change_today:.2f}%"
+                "Price Change (Today)": f"{price_change_today:.2f}%",
+                "TA Signal": signal or "N/A",
+                "TA Reason": reason or "N/A",
+                #"Social Popularity": popularity_score,
             }
         except Exception as e:
-            print(f"Error retrieving data for {ticker}: {e}")
+            st.error(f"Error retrieving data for {ticker}: {e}")
             return None
 
     asset_data = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(fetch_stock_data, ticker): ticker for ticker in tickers}
-        for future in as_completed(futures):
-            result = future.result()
-            if result:
-                asset_data.append(result)
-
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(fetch_stock_data, t): t for t in tickers}
+        for f in as_completed(futures):
+            res = f.result()
+            if res:
+                asset_data.append(res)
+    for asset in asset_data:
+        ticker = asset["Ticker"]
+        popularity_score = get_social_popularity(ticker)
+        asset["Popularity Score"] = f"{popularity_score:.2f}"
     return asset_data
+
+
 
 # Function to display assets in a table with user preferences
 def display_assets():
@@ -269,9 +380,11 @@ def format_asset_suggestions(suggestions):
             f"**{asset['Ticker']}**\n"
             f"- Price Change (Today): {asset['Price Change (Today)']}\n"
             f"- Dividend Yield: {asset['Dividend Yield']}\n"
-            f"- Current Price: {asset['Current Price']}\n\n"
+            f"- Current Price: {asset['Current Price']}\n"
+            f"- Popularity Score: {asset.get('Popularity Score', 'N/A')}\n\n"
         )
     return suggestion_text
+
 
 # Function to generate response from OpenAI
 def generate_response(financial_data, user_message, vector_store):
@@ -651,6 +764,48 @@ def get_crypto_prices():
     )
     data = response.json()
     return data
+
+## Trying to integrate Technical analysis
+def calculate_technical_indicators(ticker, period="3mo", interval="1d"):
+    """
+    Fetch daily data for the given period & interval, then compute basic TA indicators
+    like RSI. Return a summary with any signals.
+    """
+    stock = yf.Ticker(ticker)
+    try:
+        hist = stock.history(period=period, interval=interval)
+        if hist.empty:
+            return None, "No data found"
+
+        # Example using pandas_ta
+        import pandas_ta as ta
+        hist["RSI"] = ta.rsi(hist["Close"])
+        
+        # Simple logic: If RSI < 30 => 'Bullish', RSI > 70 => 'Bearish', else 'Neutral'
+        current_rsi = hist["RSI"].iloc[-1]
+        if current_rsi < 30:
+            signal = "Bullish"
+            reason = f"RSI is {current_rsi:.2f}, indicating oversold conditions."
+        elif current_rsi > 70:
+            signal = "Bearish"
+            reason = f"RSI is {current_rsi:.2f}, indicating overbought conditions."
+        else:
+            signal = "Neutral"
+            reason = f"RSI is {current_rsi:.2f}, indicating neither overbought nor oversold."
+
+        return signal, reason
+    except Exception as e:
+        return None, f"Error: {e}"
+
+
+# Reasoning why we took a trade
+def generate_trade_reason(signal, reason): #, popularity_score=None):
+    # Construct a user-friendly explanation
+    explanation = f"Signal: {signal}\nReason: {reason}"
+    #if popularity_score is not None:
+        #explanation += f"\nPopularity Score: {popularity_score}"
+    return explanation
+
 
 
 # Main App
