@@ -17,3 +17,5 @@ pandas
 requests
 matplotlib
 numpy
+tweepy
+pandas_ta
