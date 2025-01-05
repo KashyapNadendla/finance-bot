@@ -11,9 +11,13 @@ from budgeting import budgeting_tool
 from vectorstore_utils import create_or_load_vectorstore
 from data_fetcher import get_top_movers
 from technical_analysis import parse_technical_indicators
-from data_fetcher import AV_API_KEY
+#from data_fetcher import AV_API_KEY
 
-load_dotenv()
+from dotenv import load_dotenv
+import os
+
+load_dotenv(dotenv_path="/Users/apple/Desktop/PG/Summer-24/Fintech/finance-bot/.env")  
+AV_API_KEY = os.getenv("AV_API_KEY")
 
 st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 
