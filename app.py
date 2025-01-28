@@ -4,7 +4,7 @@ import os
 import PyPDF2
 import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from dotenv import load_dotenv
 from newsapi import NewsApiClient
