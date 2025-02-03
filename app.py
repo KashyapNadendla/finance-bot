@@ -109,6 +109,7 @@ def display_finance_news():
 
 # Function to scout assets with real-time price action from Yahoo Finance
 @st.cache_data(ttl=600)
+<<<<<<< Updated upstream
 # def scout_assets():
 #     tickers = [
 #         "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
@@ -251,9 +252,104 @@ def scout_assets():
 
     if not asset_data:
         st.error("No asset data could be fetched. Please try again later.")
+=======
 
-    return asset_data
 
+# def fetch_and_save_stock_data():
+#     AV_API_KEY = os.getenv("AV_API_KEY")
+#     tickers =  ["AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
+#         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
+#         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
+#         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
+#         "TMO", "MCD", "PM", "SHEL", "ABT", "NOW", "AXP", "MS", "TXN", "GE", "IBM", "QCOM", 
+#         "CAT", "ISRG", "DHR", "RY", "INTU", "VZ", "GS", "DIS", "AMGN", "PDD", "UBER", "HSBC", 
+#         "CMCSA", "NEE", "RTX", "ARM", "PFE", "T", "HDB", "UL", "AMAT", "SPGI", "BKNG", "LOW", 
+#         "TTE", "BLK", "PGR", "BHP", "UNP", "SYK", "BX", "ETN", "SNY", "HON", "SCHW", "LMT", 
+#         "TJX", "BUD", "ANET", "KKR", "MUFG", "BSX", "VRTX", "C", "COP", "ADP", "PANW", "MDT", 
+#         "MU", "UPS", "CB", "ADI", "NKE", "FI", "BA", "RIO", "DE", "SBUX", "IBN", "GILD", "MMC", 
+#         "SONY", "PLD", "BMY", "SHOP", "MELI", "UBS", "AMT", "REGN", "LRCX", "PLTR", "SO", "TD", 
+#         "ICE", "INTC", "ELV", "MDLZ", "HCA", "KLAC", "DELL", "SHW", "INFY", "ENB", "DUK", "SCCO", 
+#         "CI", "RELX", "EQIX", "ABNB", "WM", "WELL", "MO", "RACE", "TT", "PBR.A", "PBR", "CTAS", "SMFG", 
+#         "BN", "MCO", "APO", "ZTS", "GD", "APH", "SNPS", "GEV", "CEG", "CME", "PH", "AON", "CDNS", "SPOT", 
+#         "ITW", "PYPL", "CL", "BP", "CMG", "BTI", "USB", "MSI", "PNC", "CRWD", "NU", "TRI", "GSK", "TDG", "MAR", 
+#         "NOC", "SAN", "CP", "CNQ", "ECL", "MRVL", "CVS", "DEO", "APD", "MMM", "CNI", "EOG", "TGT", "BDX", 
+#         "EQNR", "ORLY", "FDX", "BMO", "FCX", "CARR", "CRH", "MCK", "CSX", "BNS", "WMB", "DASH", "COF", "EPD", 
+#         "WDAY", "NGG", "NXPI", "AJG", "EMR", "RSG", "ADSK", "AFL", "DLR", "FTNT", "TTD", "CM", "PSA", "ROP", 
+#         "JD", "MET", "HLT", "TFC", "APP", "NSC", "GM", "BBVA", "TRV", "SLB", "ET", "OKE", "SPG", "RCL", "ITUB", 
+#         "BK", "KMI", "PCAR", "DHI", "SE", "GWW", "NEM", "MFG", "URI", "ING", "SRE", "O", "MFC", "COIN", "NTES", 
+#         "FANG", "AEP", "MNST", "AZO", "JCI", "PAYX", "PSX", "CPRT", "MSTR", "ALL", "AMP", "TEAM", "FIS", "AIG", 
+#         "FICO", "D", "AMX", "MPC", "TRP", "SU", "E", "HMC", "CHTR", "CPNG", "OXY", "CCI", "LHX", "LEN", "ROST", 
+#         "ALC", "VALE", "TEL", "PWR", "WCN", "BCS", "CMI", "PRU", "MPLX", "SQ", "COR", "FAST", "MPWR", "KMB", 
+#         "KDP", "MSCI", "AEM", "PEG", "TAK", "HLN", "KVUE", "ODFL", "NDAQ", "DDOG", "PCG", "STZ", "LYG", "VST", 
+#         "CTVA", "TCOM", "VRT", "FLUT", "F", "EW", "HWM", "VLO", "HES", "LNG", "KHC", "MCHP", "KR", "IT", "SNOW", 
+#         "GEHC", "EXC", "CBRE", "NWG", "FERG", "EA", "GRMN", "IQV", "ACGL", "OTIS", "VRSK", "IR", "AME", "GLW", 
+#         "IMO", "DFS", "LVS", "STLA", "GIS", "A", "YUM", "DAL", "IRM", "LULU", "IDXX", "BKR", "MLM", "CTSH", 
+#         "TRGP", "VMC", "SYY", "ALNY", "HSY", "RMD", "ED", "HPQ", "ABEV", "XEL", "CCEP", "WIT", "GOLD", "EXR", 
+#         "DD", "VEEV", "DOW", "HEI", "ARES", "VICI", "NUE", "EFX", "ARGX", "AXON", "WAB", "AVB", "MTB", "DB", 
+#         "HIG", "SLF", "BIDU", "EIX", "HUM", "XYL", "ON", "EL", "CNC", "FMX", "NET", "EBAY", "WPM", "CVE", 
+#         "WEC", "RJF", "BRO", "ROK", "CSGP", "HEI.A", "WTW", "FITB", "WDS", "CHT", "BCE", "FER", "PPG", 
+#         "TSCO", "LI", "HUBS", "CCL", "ETR", "ANSS", "TTWO", "ZS", "LYB", "ERIC", "DXCM", "EQR", "FCNCA", 
+#         "RBLX", "K", "NVR", "FCNCO", "STT", "MTD", "VTR", "TW", "IOT", "BNTX", "LYV", "BEKE", "PHM", "TEF", 
+#         "ADM", "TPL", "DOV", "UAL", "AWK", "HPE", "BIIB", "KEYS", "TYL", "GPN", "FNV", "CAH", "CDW", "SW",
+#         "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
+#         "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
+#         "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
+#         "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
+#     asset_data = []
+
+#     for ticker in tickers:
+#         url = f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={ticker}&interval=5min&apikey={AV_API_KEY}"
+#         response = requests.get(url)
+#         if response.status_code == 200:
+#             data = response.json()
+#             time_series = data.get('Time Series (5min)', {})
+#             if time_series:
+#                 latest_time = sorted(time_series.keys(), reverse=True)[0]
+#                 latest_data = time_series[latest_time]
+#                 asset_data.append({
+#                     "Ticker": ticker,
+#                     "Latest Close": float(latest_data['4. close']),
+#                     "Open Price": float(latest_data['1. open']),
+#                     "Price Change (%)": ((float(latest_data['4. close']) - float(latest_data['1. open'])) / float(latest_data['1. open'])) * 100
+#                 })
+#     return asset_data
+
+def fetch_and_save_stock_data():
+    AV_API_KEY = os.getenv("AV_API_KEY")
+    tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META"]  # Example tickers
+    data_frames = []
+>>>>>>> Stashed changes
+
+    for ticker in tickers:
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&outputsize=compact&apikey={AV_API_KEY}"
+        response = requests.get(url)
+        data = response.json()
+        
+        if 'Time Series (Daily)' in data:
+            df = pd.DataFrame(data['Time Series (Daily)']).T
+            df.rename(columns=lambda x: x[3:], inplace=True)
+            df['Ticker'] = ticker
+            data_frames.append(df)
+
+    if data_frames:
+        full_data = pd.concat(data_frames)
+        full_data.to_csv('stock_data.csv', mode='w')  # Write to CSV, overwrite existing data
+        print("Data saved to CSV.")
+    else:
+        print("No data fetched.")
+
+def display_asset_charts():
+    if st.session_state['asset_data'] and all('Ticker' in asset for asset in st.session_state['asset_data']):
+        asset_data = st.session_state['asset_data']
+        tickers = [asset['Ticker'] for asset in asset_data]
+        selected_ticker = st.selectbox("Select a ticker to view price chart:", tickers)
+        stock = yf.Ticker(selected_ticker)
+        hist = stock.history(period="1mo")
+        st.line_chart(hist['Close'])
+    else:
+        st.error("Asset data not properly loaded or 'Ticker' key missing.")
+
+<<<<<<< Updated upstream
 # # Function to display assets in a table with user preferences
 # def display_assets():
 #     st.header("Asset Data")
@@ -283,11 +379,14 @@ def scout_assets():
 #     else:
 #         st.info("Asset data not loaded. Click 'Update Stock Prices' to load.")
 
+=======
+>>>>>>> Stashed changes
 def display_assets():
     st.header("Asset Data")
     if 'preferred_assets' not in st.session_state:
         st.session_state['preferred_assets'] = []
 
+<<<<<<< Updated upstream
     # Check if asset data is available
     if st.session_state['asset_data']:
         asset_data = st.session_state['asset_data']
@@ -357,6 +456,10 @@ def display_assets():
 #         else:
 #             st.info("Asset data not loaded. Please update stock prices to check price alerts.")
 def check_price_alerts(df_filtered):
+=======
+# Function to check for price alerts
+def check_price_alerts():
+>>>>>>> Stashed changes
     if 'preferred_assets' in st.session_state and st.session_state['preferred_assets']:
         alert_threshold = st.slider(
             "Set price change alert threshold (%)",
@@ -635,23 +738,12 @@ def budgeting_tool():
 
 
 # Function to get top movers within the top 500 coins
-def get_top_movers():
-    CMC_API_KEY = os.getenv("CMC_API_KEY")
-    url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
-    parameters = {
-        'start': '1',
-        'limit': '500',  # Fetch top 500 coins by market cap
-        'convert': 'USD',
-        'sort': 'market_cap',
-        'sort_dir': 'desc'
-    }
-    headers = {
-        'Accepts': 'application/json',
-        'X-CMC_PRO_API_KEY': CMC_API_KEY,
-    }
-    session = requests.Session()
-    session.headers.update(headers)
+def fetch_top_crypto_gainers_losers():
+    AV_API_KEY = os.getenv("AV_API_KEY")
+    cryptos = ["BTC", "ETH", "LTC"]  # Example cryptocurrencies
+    crypto_data = []
 
+<<<<<<< Updated upstream
     try:
         response = session.get(url, params=parameters)
         data = json.loads(response.text)
@@ -689,6 +781,32 @@ def get_crypto_prices():
     )
     data = response.json()
     return data
+=======
+    for crypto in cryptos:
+        url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={crypto}&market=USD&apikey={AV_API_KEY}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            time_series = data.get('Time Series (Digital Currency Daily)', {})
+            if time_series:
+                latest_time = sorted(time_series.keys(), reverse=True)[0]
+                latest_data = time_series[latest_time]
+                close_price = float(latest_data['4a. close (USD)'])
+                open_price = float(latest_data['1a. open (USD)'])
+                price_change = ((close_price - open_price) / open_price) * 100
+                crypto_data.append({
+                    "Crypto": crypto,
+                    "Close Price": close_price,
+                    "Open Price": open_price,
+                    "Price Change (%)": price_change
+                })
+
+    # Sort to find top gainers and losers
+    top_gainers = sorted(crypto_data, key=lambda x: x["Price Change (%)"], reverse=True)[:5]
+    top_losers = sorted(crypto_data, key=lambda x: x["Price Change (%)"])[:5]
+
+    return top_gainers, top_losers
+>>>>>>> Stashed changes
 
 
 # Main App
@@ -699,7 +817,7 @@ st.markdown("# Welcome to Your Personal Finance Assistant 💰")
 # Load asset data on initial app load
 if not st.session_state['asset_data']:
     with st.spinner('Loading stock prices...'):
-        st.session_state['asset_data'] = scout_assets()
+        st.session_state['asset_data'] = fetch_and_save_stock_data()
         st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 # Display stock prices updated time and Update button at the top right
@@ -714,10 +832,12 @@ with col2:
     else:
         st.write("**Stock prices not loaded.**")
     if st.button("Update Stock Prices"):
+        fetch_and_save_stock_data()
         with st.spinner("Updating stock prices..."):
-            st.session_state['asset_data'] = scout_assets()
+            st.session_state['asset_data'] = fetch_top_crypto_gainers_losers()
             st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            st.success("Stock prices updated.")
+            st.success("Stock prices updated and saved to CSV.")
+
 
 # Sidebar with user inputs
 with st.sidebar:
@@ -773,7 +893,7 @@ with tab2:
     st.subheader("Asset Price Chart")
     display_asset_charts()
     st.subheader("Top Cryptocurrency Movers (24h Change)")
-    crypto_data = get_top_movers()
+    crypto_data = fetch_top_crypto_gainers_losers()
     if crypto_data:
         df_crypto = pd.DataFrame(crypto_data)
         st.dataframe(df_crypto)
