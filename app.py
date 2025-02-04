@@ -2,7 +2,6 @@ import streamlit as st
 from openai import OpenAI
 import os
 import PyPDF2
-import yfinance as yf
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
@@ -12,7 +11,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import requests
 import json
-import re  # Added for regular expression matching
+import re  # For regular expression matching
 from newsapi.newsapi_exception import NewsAPIException
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -22,7 +21,8 @@ st.set_page_config(page_title="Personal Finance Assistant", page_icon="💰")
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")    # Set up NEWS_API_KEY in .env
-CMC_API_KEY = os.getenv("CMC_API_KEY")      # Added for CoinMarketCap API key
+CMC_API_KEY = os.getenv("CMC_API_KEY")        # For CoinMarketCap API key
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")  # For Alpha Vantage
 
 # Set up OpenAI client instance
 client = OpenAI(api_key=API_KEY)
@@ -42,7 +42,8 @@ if 'asset_data' not in st.session_state:
     st.session_state['asset_data'] = []
     st.session_state['asset_data_timestamp'] = None  # To store the time when data was last updated
 
-# Function to load and process PDFs from the data folder with error handling
+# ----------------------- Document Processing Functions ----------------------- #
+
 def load_and_process_pdfs(data_folder):
     pdf_texts = []
     for filename in os.listdir(data_folder):
@@ -60,32 +61,18 @@ def load_and_process_pdfs(data_folder):
                 print(f"Warning: An error occurred while processing '{filename}': {e}. Skipping.")
     return pdf_texts
 
-# Function to create a vector store from texts
-# def create_vector_store(texts):
-#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-#     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
-
-#     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-#     vector_store = FAISS.from_texts(
-#         texts_chunks,
-#         embeddings,
-#         collection_name="financial_assistant_collection",        
-#     )
-#     vector_store.persist()
-#     return vector_store
-
-
 def create_vector_store(texts):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     texts_chunks = [chunk for text in texts for chunk in text_splitter.split_text(text)]
 
     embeddings = OpenAIEmbeddings(api_key=API_KEY)
-    # Create a FAISS vector store without the `collection_name` argument
+    # Create a FAISS vector store without the collection_name argument
     vector_store = FAISS.from_texts(texts_chunks, embeddings)
     
     return vector_store
 
-# Function to fetch the top 3 finance-related news articles
+# ----------------------- News Functions ----------------------- #
+
 @st.cache_data(ttl=86400)  # Cache for 24 hours
 def fetch_finance_news():
     try:
@@ -103,14 +90,12 @@ def fetch_finance_news():
         articles = news.get('articles', [])
         return [{"title": article['title'], "url": article['url'], "source": article['source']['name']} for article in articles]
     except NewsAPIException as e:
-        if 'rateLimited' in str(e):  # Check for rate limit error in exception message
+        if 'rateLimited' in str(e):
             st.warning("News API rate limit exceeded. Please try again later.")
         else:
             st.error("An error occurred while fetching news. Please try again later.")
         return []
 
-# Function to display the top finance news in Streamlit
-# Display the finance news
 def display_finance_news():
     st.subheader("Top 3 Finance News Articles Today")
     articles = fetch_finance_news()
@@ -121,11 +106,44 @@ def display_finance_news():
     else:
         st.write("No news articles available at this time.")
 
-# Function to scout assets with real-time price action from Yahoo Finance
+# ----------------------- Alpha Vantage Functions for Stock Data ----------------------- #
+
+# Function to fetch the global quote for a given ticker using Alpha Vantage.
+def fetch_stock_data(ticker):
+    url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "GLOBAL_QUOTE",
+        "symbol": ticker,
+        "apikey": ALPHA_VANTAGE_API_KEY
+    }
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        # Check if the response contains valid data
+        if "Global Quote" not in data or not data["Global Quote"]:
+            return None
+        quote = data["Global Quote"]
+        open_price = float(quote.get("02. open", 0))
+        current_price = float(quote.get("05. price", 0))
+        # Use the provided change percent (e.g., "-0.1354%") if available
+        change_percent_str = quote.get("10. change percent", "0%")
+        change_percent = float(change_percent_str.replace("%", ""))
+        
+        return {
+            "Ticker": ticker,
+            "Current Price": f"${current_price:.2f}",
+            "Dividend Yield": "N/A",  # Not provided by Alpha Vantage
+            "Price Change (Today)": f"{change_percent:.2f}%"
+        }
+    except Exception as e:
+        print(f"Error retrieving data for {ticker}: {e}")
+        return None
+
+# Function to fetch asset data for a list of tickers in parallel.
 @st.cache_data(ttl=600)
 def scout_assets():
     tickers = [
-        "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO", 
+        "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSLA", "AVGO", 
         "LLY", "WMT", "JPM", "V", "UNH", "XOM", "NVO", "ORCL", "MA", "PG", "HD", "COST", 
         "JNJ", "ABBV", "BAC", "NFLX", "KO", "CRM", "SAP", "CVX", "ASML", "MRK", "TMUS", 
         "AMD", "TM", "PEP", "LIN", "AZN", "BABA", "CSCO", "NVS", "WFC", "ACN", "ADBE", 
@@ -162,32 +180,11 @@ def scout_assets():
         "NOK", "IFF", "DECK", "BBD", "DTE", "CVNA", "KB", "VLTO", "GIB", "FTV", "DVN", "STM", "HOOD", "SBAC", 
         "TROW", "BR", "LDOS", "CHD", "PHG", "VOD", "IX", "HAL", "NTAP", "FE", "PBA", "TECK", "CQP", "PPL", 
         "TU", "NTR", "ERIE", "ILMN", "CCJ", "BAH", "ES", "HUBB", "AEE", "WY", "CPAY", "ZM", "WDC", "EQT", 
-        "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"]
-
-    # Parallel processing with ThreadPoolExecutor
-    def fetch_stock_data(ticker):
-        stock = yf.Ticker(ticker)
-        try:
-            hist = stock.history(period="1d", interval="1m")
-            if hist.empty:
-                return None  # Skip if no data found
-
-            latest_close = hist['Close'].iloc[-1]
-            open_price = hist['Close'].iloc[0]
-            price_change_today = ((latest_close - open_price) / open_price) * 100
-            dividend_yield = stock.info.get("dividendYield", "N/A")
-
-            return {
-                "Ticker": ticker,
-                "Current Price": f"${latest_close:.2f}",
-                "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
-                "Price Change (Today)": f"{price_change_today:.2f}%"
-            }
-        except Exception as e:
-            print(f"Error retrieving data for {ticker}: {e}")
-            return None
+        "HBAN", "GDDY", "QSR", "ROL", "WST", "BAM", "PTC"
+    ]
 
     asset_data = []
+    # Using ThreadPoolExecutor to parallelize API calls (be aware of Alpha Vantage rate limits!)
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(fetch_stock_data, ticker): ticker for ticker in tickers}
         for future in as_completed(futures):
@@ -197,13 +194,38 @@ def scout_assets():
 
     return asset_data
 
-# Function to display assets in a table with user preferences
+# Function to get historical daily prices using Alpha Vantage.
+def get_daily_history(ticker, outputsize="full"):
+    url = "https://www.alphavantage.co/query"
+    params = {
+        "function": "TIME_SERIES_DAILY",
+        "symbol": ticker,
+        "apikey": ALPHA_VANTAGE_API_KEY,
+        "outputsize": outputsize  # "compact" returns ~100 data points; "full" returns full-length history
+    }
+    try:
+        response = requests.get(url, params=params)
+        data = response.json()
+        if "Time Series (Daily)" not in data:
+            st.write(f"No daily data found for ticker {ticker}")
+            return None
+        time_series = data["Time Series (Daily)"]
+        df = pd.DataFrame.from_dict(time_series, orient="index")
+        df.index = pd.to_datetime(df.index)
+        df.sort_index(inplace=True)
+        df["4. close"] = df["4. close"].astype(float)
+        return df["4. close"]
+    except Exception as e:
+        st.write(f"Error retrieving historical data for {ticker}: {e}")
+        return None
+
+# ----------------------- Display Functions ----------------------- #
+
 def display_assets():
     st.header("Asset Data")
     if 'preferred_assets' not in st.session_state:
         st.session_state['preferred_assets'] = []
 
-    # Check if asset data is available
     if st.session_state['asset_data']:
         asset_data = st.session_state['asset_data']
         df = pd.DataFrame(asset_data)
@@ -226,7 +248,6 @@ def display_assets():
     else:
         st.info("Asset data not loaded. Click 'Update Stock Prices' to load.")
 
-# Function to check for price alerts
 def check_price_alerts():
     if 'preferred_assets' in st.session_state and st.session_state['preferred_assets']:
         alert_threshold = st.slider(
@@ -245,19 +266,41 @@ def check_price_alerts():
         else:
             st.info("Asset data not loaded. Please update stock prices to check price alerts.")
 
-# Function to display asset charts
+# Display asset charts using historical data from Alpha Vantage.
 def display_asset_charts():
     if st.session_state['asset_data']:
         asset_data = st.session_state['asset_data']
         tickers = [asset['Ticker'] for asset in asset_data]
         selected_ticker = st.selectbox("Select a ticker to view price chart:", tickers)
-        stock = yf.Ticker(selected_ticker)
-        hist = stock.history(period="1mo")
-        st.line_chart(hist['Close'])
+        # For a one-month chart, "compact" is typically sufficient.
+        hist = get_daily_history(selected_ticker, outputsize="compact")
+        if hist is not None and not hist.empty:
+            one_month_ago = pd.Timestamp.today() - pd.DateOffset(months=1)
+            hist = hist[hist.index > one_month_ago]
+            st.line_chart(hist)
+        else:
+            st.info("No data available for chart.")
     else:
         st.info("Asset data not loaded. Please update stock prices to view charts.")
 
-# Function to format asset suggestions as text
+def display_chart_for_asset(message):
+    # Use regex to detect phrases like 'price of [ticker]' or 'chart of [ticker]'
+    pattern = r'\b(?:price|chart)\s+(?:of\s+)?([A-Za-z0-9.\-]+)\b'
+    matches = re.findall(pattern, message, re.IGNORECASE)
+    if matches:
+        ticker = matches[0].upper()
+        # For a 1-year chart, request full historical data
+        hist = get_daily_history(ticker, outputsize="full")
+        if hist is not None and not hist.empty:
+            one_year_ago = pd.Timestamp.today() - pd.DateOffset(years=1)
+            hist = hist[hist.index > one_year_ago]
+            return hist
+        else:
+            st.write(f"No data found for ticker {ticker}")
+            return None
+    else:
+        return None
+
 def format_asset_suggestions(suggestions):
     if not suggestions:
         return "No assets currently meet the criteria for recommendation."
@@ -271,7 +314,6 @@ def format_asset_suggestions(suggestions):
         )
     return suggestion_text
 
-# Function to generate response from OpenAI
 def generate_response(financial_data, user_message, vector_store):
     if st.session_state['asset_data']:
         asset_suggestions = st.session_state['asset_data']
@@ -301,7 +343,6 @@ def generate_response(financial_data, user_message, vector_store):
     Provide a helpful and informative response as a personal finance assistant. Consider the user's financial data, asset suggestions, and the context from the documents in your response. Include prices of top movers in stocks based on the data you have.
     """
 
-    # Generate response from OpenAI
     completion = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -313,82 +354,44 @@ def generate_response(financial_data, user_message, vector_store):
 
     return response
 
-# Function to handle the chat interface
 def chat_interface():
     st.header("Chat with Your Personal Finance Assistant")
 
-    # Display the chat messages in order
+    # Display previous chat messages
     for message in st.session_state['chat_history']:
         with st.chat_message(message['role']):
             st.markdown(message['content'])
-            # If there's a chart associated with this message, display it
             if 'chart_data' in message:
                 st.line_chart(message['chart_data'])
 
-    # Get User Input
+    # Get user input
     user_input = st.chat_input("You:")
     if user_input:
         financial_data = st.session_state['financial_data']
         vector_store = st.session_state['vector_store']
 
-        # Generate assistant's response
+        # Generate assistant response
         response = generate_response(financial_data, user_input, vector_store)
 
-        # Check if the user is asking for the price of an asset
+        # Check if the message is asking for a chart (e.g. "chart of AAPL")
         chart_data = display_chart_for_asset(user_input)
 
-        # Add user message to chat history
+        # Append messages to chat history
         st.session_state['chat_history'].append({"role": "user", "content": user_input})
-
-        # Add assistant's message and chart data to chat history
         assistant_message = {"role": "assistant", "content": response}
         if chart_data is not None:
             assistant_message['chart_data'] = chart_data
         st.session_state['chat_history'].append(assistant_message)
 
-        # Display the last two messages (user and assistant)
+        # Display the latest two messages
         for message in st.session_state['chat_history'][-2:]:
             with st.chat_message(message['role']):
                 st.markdown(message['content'])
                 if 'chart_data' in message:
                     st.line_chart(message['chart_data'])
 
+# ----------------------- Budgeting and Crypto Tools ----------------------- #
 
-def display_chart_for_asset(message):
-    # Regular expression pattern to detect phrases like 'price of [ticker]' or 'chart of [ticker]'
-    pattern = r'\b(?:price|chart)\s+(?:of\s+)?([A-Za-z0-9.\-]+)\b'
-    matches = re.findall(pattern, message, re.IGNORECASE)
-    if matches:
-        ticker = matches[0].upper()
-        stock = yf.Ticker(ticker)
-        try:
-            hist = stock.history(period="1y")
-            if not hist.empty:
-                # Return the closing prices for plotting
-                return hist['Close']
-            else:
-                st.write(f"No data found for ticker {ticker}")
-                return None
-        except Exception as e:
-            st.write(f"Error retrieving data for {ticker}: {e}")
-            return None
-    else:
-        return None
-
-        response = generate_response(financial_data, user_input, vector_store)
-
-        # Add user message and assistant response to chat history
-        st.session_state['chat_history'].append({"role": "user", "content": user_input})
-        st.session_state['chat_history'].append({"role": "assistant", "content": response})
-
-        # Display latest messages
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        with st.chat_message("assistant"):
-            st.markdown(response)
-
-
-# Function for the budgeting tool
 def budgeting_tool():
     st.header("Budgeting Tool")
     income = st.number_input(
@@ -409,14 +412,11 @@ def budgeting_tool():
     else:
         st.error(f"Monthly Deficit: ${-savings:.2f}")
 
-
-# Function to get top movers within the top 500 coins
 def get_top_movers():
-    CMC_API_KEY = os.getenv("CMC_API_KEY")
     url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest'
     parameters = {
         'start': '1',
-        'limit': '500',  # Fetch top 500 coins by market cap
+        'limit': '500',  # Top 500 coins by market cap
         'convert': 'USD',
         'sort': 'market_cap',
         'sort_dir': 'desc'
@@ -431,14 +431,11 @@ def get_top_movers():
     try:
         response = session.get(url, params=parameters)
         data = response.json()
-
-        # Check if the 'data' key is present in the response
         if 'data' not in data:
             st.error("Error: No data found in the response from CoinMarketCap.")
-            print("Response content:", data)  # Log the full response for debugging
+            print("Response content:", data)
             return []
 
-        # Extract the relevant data
         crypto_data = []
         for crypto in data['data']:
             crypto_data.append({
@@ -448,13 +445,9 @@ def get_top_movers():
                 '24h Change (%)': crypto['quote']['USD']['percent_change_24h']
             })
 
-        # Sort the data by 24h Change (%) in descending order
         crypto_data = sorted(crypto_data, key=lambda x: x['24h Change (%)'], reverse=True)
-
-        # Get top 10 movers
         top_movers = crypto_data[:10]
 
-        # Format the prices and percentage changes
         for item in top_movers:
             item['Price (USD)'] = f"${item['Price (USD)']:.2f}"
             item['24h Change (%)'] = f"{item['24h Change (%)']:.2f}%"
@@ -470,8 +463,6 @@ def get_top_movers():
         print("JSON decode error:", e)
         return []
 
-
-# Function to get cryptocurrency prices
 def get_crypto_prices():
     response = requests.get(
         "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd"
@@ -479,10 +470,8 @@ def get_crypto_prices():
     data = response.json()
     return data
 
+# ----------------------- Main App ----------------------- #
 
-# Main App
-
-# Add a welcome header with an emoji
 st.markdown("# Welcome to Your Personal Finance Assistant 💰")
 
 # Load asset data on initial app load
@@ -491,12 +480,10 @@ if not st.session_state['asset_data']:
         st.session_state['asset_data'] = scout_assets()
         st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-# Display stock prices updated time and Update button at the top right
+# Display stock prices update time and an update button
 col1, col2 = st.columns([8, 2])
-
 with col1:
-    pass  # Empty column for layout alignment
-
+    pass  # For layout alignment
 with col2:
     if st.session_state['asset_data_timestamp']:
         st.write(f"**Stock prices updated as of:** {st.session_state['asset_data_timestamp']}")
@@ -508,11 +495,10 @@ with col2:
             st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             st.success("Stock prices updated.")
 
-# Sidebar with user inputs
+# Sidebar settings
 with st.sidebar:
     st.header("User Settings")
 
-    # Process Documents for Vector Store
     st.header("Process Documents for Vector Store")
     if st.button("Process Documents"):
         with st.spinner('Processing documents...'):
@@ -524,7 +510,6 @@ with st.sidebar:
             else:
                 st.warning("No PDF documents found in the 'data' folder.")
 
-    # Allow Users to Upload Their Own Documents
     st.header("Upload Your Own Documents")
     uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
     if uploaded_files:
@@ -536,7 +521,6 @@ with st.sidebar:
         st.session_state['vector_store'] = create_vector_store(pdf_texts)
         st.success("Documents uploaded and processed.")
 
-    # Financial Data Input
     st.header("Enter Your Financial Data")
     with st.form("financial_data_form"):
         st.write("Please provide your financial data.")
@@ -551,7 +535,7 @@ with st.sidebar:
             st.session_state['financial_data'] = financial_data_input
             st.success("Financial data updated.")
 
-# Create Tabs for Navigation
+# Create navigation tabs
 tab1, tab2, tab3, tab4 = st.tabs(["News", "Assets", "Chat", "Tools"])
 
 with tab1:
@@ -568,7 +552,6 @@ with tab2:
         st.dataframe(df_crypto)
     else:
         st.write("Failed to retrieve cryptocurrency prices.")
-
 
 with tab3:
     chat_interface()
