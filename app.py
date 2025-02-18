@@ -16,8 +16,8 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from newsapi import NewsApiClient
 from newsapi.newsapi_exception import NewsAPIException
-from openai import OpenAI  # Using OpenAI's client
-
+#from openai import OpenAI  # Using OpenAI's client
+import openai
 
 # ---------------------- INITIAL SETUP ---------------------- #
 
@@ -29,7 +29,8 @@ CMC_API_KEY = os.getenv("CMC_API_KEY")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 
-client = OpenAI(api_key=API_KEY)
+# client = OpenAI(api_key=API_KEY)
+client = openai.Client(api_key=API_KEY)
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
 
 # CSV file for caching stock data
@@ -112,58 +113,27 @@ def display_finance_news():
 # ---------------------- STOCK DATA ---------------------- #
 
 def fetch_stock_data(ticker):
-    base_url = "https://www.alphavantage.co/query"
-    
-    # Fetch stock prices
-    price_params = {
-        "function": "TIME_SERIES_INTRADAY",
-        "symbol": ticker,
-        "interval": "5min",
-        "apikey": ALPHA_VANTAGE_API_KEY
-    }
-    
-    # Fetch company overview (for Dividend Yield)
-    overview_params = {
-        "function": "OVERVIEW",
-        "symbol": ticker,
-        "apikey": ALPHA_VANTAGE_API_KEY
-    }
-
     try:
-        # Fetch stock price data
-        price_response = requests.get(base_url, params=price_params)
-        price_data = price_response.json()
-        time_series_key = "Time Series (5min)"
-        
-        if time_series_key not in price_data:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="1d", interval="5m")
+
+        if hist.empty:
+            print(f"No data found for {ticker}")
             return None
 
-        latest_time = max(price_data[time_series_key].keys())
-        latest_data = price_data[time_series_key][latest_time]
-        open_price = float(latest_data["1. open"])
-        close_price = float(latest_data["4. close"])
-        price_change_today = ((close_price - open_price) / open_price) * 100
-
-        # Fetch dividend yield
-        overview_response = requests.get(base_url, params=overview_params)
-        overview_data = overview_response.json()
-        dividend_yield = overview_data.get("DividendYield", "N/A")
-        
-        # Convert dividend yield to percentage if available
-        if dividend_yield != "N/A":
-            dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
+        latest_close = hist['Close'].iloc[-1]
+        open_price = hist['Open'].iloc[0]
+        price_change_today = ((latest_close - open_price) / open_price) * 100
 
         return {
             "Ticker": ticker,
-            "Current Price": f"${close_price:.2f}",
-            "Price Change (Today)": f"{price_change_today:.2f}%",
-            "Dividend Yield": dividend_yield
+            "Current Price": f"${latest_close:.2f}",
+            "Price Change (Today)": f"{price_change_today:.2f}%"
         }
-
+    
     except Exception as e:
         print(f"Error retrieving data for {ticker}: {e}")
         return None
-
 
 def scout_assets():
     tickers = [
@@ -180,8 +150,16 @@ def scout_assets():
     return asset_data
 
 def save_asset_data_to_csv(asset_data, filename=STOCK_CSV):
+    if not asset_data:
+        print("Warning: Trying to save empty asset data to CSV!")  # Debugging log
+        return
+
     df = pd.DataFrame(asset_data)
     df.to_csv(filename, index=False)
+
+    # 🛠️ Debugging: Print first 5 rows after writing
+    print(f"Saved CSV: {filename}")
+    print(df.head())
 
 # def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
 #     if os.path.exists(filename):
@@ -210,13 +188,20 @@ def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
                 return None
     return None
 
-
 def get_asset_data():
-    data = load_asset_data_from_csv()
-    if data is None:
-        data = scout_assets()
-        save_asset_data_to_csv(data)
+    print("Fetching new stock data from Alpha Vantage...")  # Debugging log
+    data = scout_assets()  # Fetch fresh stock data
+    print(f"Fetched {len(data)} stocks.")  # Debugging log
+
+    if not data:
+        print("Error: No stock data received!")  # Debugging log
+        return []
+
+    save_asset_data_to_csv(data)  # Save new data to CSV
+    st.session_state['asset_data'] = data  # 🔄 Force update session state
     return data
+
+
 
 # ---------------------- DISPLAY FUNCTIONS ---------------------- #
 
@@ -608,10 +593,12 @@ def agentic_chat_interface():
 st.markdown("# Welcome to Your Personal Finance Assistant 💰")
 
 # Load asset data on initial load (CSV caching)
-if not st.session_state['asset_data']:
-    with st.spinner('Loading stock prices...'):
-        st.session_state['asset_data'] = get_asset_data()
-        st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+# 🚀 Always fetch fresh stock data when the app starts
+with st.spinner('Loading stock prices...'):
+    st.session_state['asset_data'] = get_asset_data()
+    st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    st.success("Stock prices loaded.")
+
 
 # Display update info and update button
 col1, col2 = st.columns([8, 2])
@@ -624,10 +611,11 @@ with col2:
         st.write("**Stock prices not loaded.**")
     if st.button("Update Stock Prices"):
         with st.spinner("Updating stock prices..."):
-            st.session_state['asset_data'] = scout_assets()
-            save_asset_data_to_csv(st.session_state['asset_data'])
-            st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            st.success("Stock prices updated.")
+         st.session_state['asset_data'] = scout_assets()
+         save_asset_data_to_csv(st.session_state['asset_data'])
+         st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+         st.success("Stock prices updated.")
+
 
 with st.sidebar:
     st.header("User Settings")
