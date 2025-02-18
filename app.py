@@ -145,13 +145,33 @@ def save_asset_data_to_csv(asset_data, filename=STOCK_CSV):
     df = pd.DataFrame(asset_data)
     df.to_csv(filename, index=False)
 
+# def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
+#     if os.path.exists(filename):
+#         mod_time = os.path.getmtime(filename)
+#         if time.time() - mod_time < ttl:
+#             df = pd.read_csv(filename)
+#             return df.to_dict(orient="records")
+#     return None
+
 def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
     if os.path.exists(filename):
+        # Check if file is empty
+        if os.path.getsize(filename) == 0:
+            st.warning(f"{filename} is empty. Fetching new asset data.")
+            return None
         mod_time = os.path.getmtime(filename)
         if time.time() - mod_time < ttl:
-            df = pd.read_csv(filename)
-            return df.to_dict(orient="records")
+            try:
+                df = pd.read_csv(filename)
+                if df.empty:
+                    st.warning(f"{filename} contains no data. Fetching new asset data.")
+                    return None
+                return df.to_dict(orient="records")
+            except pd.errors.EmptyDataError:
+                st.warning(f"Encountered EmptyDataError when reading {filename}.")
+                return None
     return None
+
 
 def get_asset_data():
     data = load_asset_data_from_csv()
