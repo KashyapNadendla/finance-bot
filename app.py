@@ -12,10 +12,12 @@ from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
+# from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from newsapi import NewsApiClient
 from newsapi.newsapi_exception import NewsAPIException
 from openai import OpenAI  # Using OpenAI's client
+
 
 # ---------------------- INITIAL SETUP ---------------------- #
 
