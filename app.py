@@ -16,8 +16,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
 from newsapi import NewsApiClient
 from newsapi.newsapi_exception import NewsAPIException
-#from openai import OpenAI  # Using OpenAI's client
-import openai
+from openai import OpenAI  # Using OpenAI's client
 
 
 # ---------------------- INITIAL SETUP ---------------------- #
@@ -30,7 +29,7 @@ CMC_API_KEY = os.getenv("CMC_API_KEY")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 
-client = openai.OpenAI(api_key=API_KEY)
+client = OpenAI(api_key=API_KEY)
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
 
 # CSV file for caching stock data
