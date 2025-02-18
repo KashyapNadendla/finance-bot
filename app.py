@@ -24,6 +24,8 @@ load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 CMC_API_KEY = os.getenv("CMC_API_KEY")
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+
 
 client = OpenAI(api_key=API_KEY)
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
@@ -108,24 +110,58 @@ def display_finance_news():
 # ---------------------- STOCK DATA ---------------------- #
 
 def fetch_stock_data(ticker):
-    stock = yf.Ticker(ticker)
+    base_url = "https://www.alphavantage.co/query"
+    
+    # Fetch stock prices
+    price_params = {
+        "function": "TIME_SERIES_INTRADAY",
+        "symbol": ticker,
+        "interval": "5min",
+        "apikey": ALPHA_VANTAGE_API_KEY
+    }
+    
+    # Fetch company overview (for Dividend Yield)
+    overview_params = {
+        "function": "OVERVIEW",
+        "symbol": ticker,
+        "apikey": ALPHA_VANTAGE_API_KEY
+    }
+
     try:
-        hist = stock.history(period="1d", interval="1m")
-        if hist.empty:
+        # Fetch stock price data
+        price_response = requests.get(base_url, params=price_params)
+        price_data = price_response.json()
+        time_series_key = "Time Series (5min)"
+        
+        if time_series_key not in price_data:
             return None
-        latest_close = hist['Close'].iloc[-1]
-        open_price = hist['Close'].iloc[0]
-        price_change_today = ((latest_close - open_price) / open_price) * 100
-        dividend_yield = stock.info.get("dividendYield", "N/A")
+
+        latest_time = max(price_data[time_series_key].keys())
+        latest_data = price_data[time_series_key][latest_time]
+        open_price = float(latest_data["1. open"])
+        close_price = float(latest_data["4. close"])
+        price_change_today = ((close_price - open_price) / open_price) * 100
+
+        # Fetch dividend yield
+        overview_response = requests.get(base_url, params=overview_params)
+        overview_data = overview_response.json()
+        dividend_yield = overview_data.get("DividendYield", "N/A")
+        
+        # Convert dividend yield to percentage if available
+        if dividend_yield != "N/A":
+            dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
+
         return {
             "Ticker": ticker,
-            "Current Price": f"${latest_close:.2f}",
-            "Dividend Yield": f"{dividend_yield:.2%}" if dividend_yield != "N/A" else "N/A",
-            "Price Change (Today)": f"{price_change_today:.2f}%"
+            "Current Price": f"${close_price:.2f}",
+            "Price Change (Today)": f"{price_change_today:.2f}%",
+            "Dividend Yield": dividend_yield
         }
+
     except Exception as e:
         print(f"Error retrieving data for {ticker}: {e}")
         return None
+
 
 def scout_assets():
     tickers = [
@@ -255,14 +291,18 @@ def display_chart_for_asset(message):
 def format_asset_suggestions(suggestions):
     if not suggestions:
         return "No assets currently meet the criteria for recommendation."
+    
     suggestion_text = "Here are some asset suggestions based on recent performance:\n\n"
     for asset in suggestions:
         suggestion_text += (
             f"**{asset['Ticker']}**\n"
             f"- Price Change (Today): {asset['Price Change (Today)']}\n"
-            f"- Dividend Yield: {asset['Dividend Yield']}\n"
-            f"- Current Price: {asset['Current Price']}\n\n"
+            f"- Current Price: {asset['Current Price']}\n"
         )
+        if "Dividend Yield" in asset and asset["Dividend Yield"] != "N/A":
+            suggestion_text += f"- Dividend Yield: {asset['Dividend Yield']}\n"
+        suggestion_text += "\n"
+    
     return suggestion_text
 
 def generate_response(financial_data, user_message, vector_store):
