@@ -7,6 +7,7 @@ import requests
 import pandas as pd
 import PyPDF2
 import yfinance as yf
+import ta  # Technical Analysis library (install via pip install ta)
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -25,7 +26,6 @@ API_KEY = os.getenv("OPENAI_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
-
 
 client = OpenAI(api_key=API_KEY)
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
@@ -147,7 +147,6 @@ def fetch_stock_data(ticker):
         overview_data = overview_response.json()
         dividend_yield = overview_data.get("DividendYield", "N/A")
         
-        # Convert dividend yield to percentage if available
         if dividend_yield != "N/A":
             dividend_yield = f"{float(dividend_yield) * 100:.2f}%"
 
@@ -161,7 +160,6 @@ def fetch_stock_data(ticker):
     except Exception as e:
         print(f"Error retrieving data for {ticker}: {e}")
         return None
-
 
 def scout_assets():
     tickers = [
@@ -181,17 +179,8 @@ def save_asset_data_to_csv(asset_data, filename=STOCK_CSV):
     df = pd.DataFrame(asset_data)
     df.to_csv(filename, index=False)
 
-# def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
-#     if os.path.exists(filename):
-#         mod_time = os.path.getmtime(filename)
-#         if time.time() - mod_time < ttl:
-#             df = pd.read_csv(filename)
-#             return df.to_dict(orient="records")
-#     return None
-
 def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
     if os.path.exists(filename):
-        # Check if file is empty
         if os.path.getsize(filename) == 0:
             st.warning(f"{filename} is empty. Fetching new asset data.")
             return None
@@ -207,7 +196,6 @@ def load_asset_data_from_csv(filename=STOCK_CSV, ttl=STOCK_DATA_TTL_SECONDS):
                 st.warning(f"Encountered EmptyDataError when reading {filename}.")
                 return None
     return None
-
 
 def get_asset_data():
     data = load_asset_data_from_csv()
@@ -425,6 +413,49 @@ def get_crypto_prices():
     response = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd")
     return response.json()
 
+# ---------------------- TECHNICAL ANALYSIS FUNCTIONS ---------------------- #
+
+def perform_technical_analysis(ticker, period="1y", interval="1d"):
+    """
+    Fetch historical data and compute technical indicators:
+      - RSI (14-period)
+      - 20-day Simple Moving Average (SMA20)
+      - Bollinger Bands (20-day window, 2 std dev)
+    Returns a summary string of the latest values.
+    """
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period=period, interval=interval)
+    if hist.empty:
+        return "No data available"
+    
+    try:
+        rsi = ta.momentum.RSIIndicator(hist["Close"], window=14).rsi().iloc[-1]
+    except Exception as e:
+        rsi = None
+    sma20 = hist["Close"].rolling(window=20).mean().iloc[-1]
+    bb_indicator = ta.volatility.BollingerBands(hist["Close"], window=20, window_dev=2)
+    bb_upper = bb_indicator.bollinger_hband().iloc[-1]
+    bb_lower = bb_indicator.bollinger_lband().iloc[-1]
+    latest_close = hist["Close"].iloc[-1]
+    
+    if rsi is not None:
+        summary = f"Price: ${latest_close:.2f}, RSI: {rsi:.2f}, SMA20: ${sma20:.2f}, Bollinger Bands: Upper=${bb_upper:.2f}, Lower=${bb_lower:.2f}"
+    else:
+        summary = f"Price: ${latest_close:.2f}, SMA20: ${sma20:.2f}, Bollinger Bands: Upper=${bb_upper:.2f}, Lower=${bb_lower:.2f}"
+    return summary
+
+def get_technical_analysis_summaries(asset_data):
+    """
+    For each asset, compute a technical analysis summary on daily and weekly timeframes.
+    """
+    summaries = ""
+    for asset in asset_data:
+        ticker = asset["Ticker"]
+        daily_summary = perform_technical_analysis(ticker, period="1y", interval="1d")
+        weekly_summary = perform_technical_analysis(ticker, period="2y", interval="1wk")
+        summaries += f"{ticker} Technical Analysis:\nDaily: {daily_summary}\nWeekly: {weekly_summary}\n\n"
+    return summaries
+
 # ---------------------- AGENTIC ADVISOR FUNCTIONS ---------------------- #
 
 def call_openai_llm(prompt, system="", model="gpt-4o"):
@@ -496,7 +527,6 @@ def get_macro_conditions():
     else:
         conditions["Interest Rates"] = "High or N/A"
     
-    # Check news for war/conflict keywords
     articles = fetch_finance_news()
     war_flag = any("war" in article['title'].lower() or "conflict" in article['title'].lower() for article in articles)
     conditions["War Status"] = "No ongoing wars" if not war_flag else "Potential conflict detected"
@@ -506,11 +536,11 @@ def get_macro_conditions():
 
 def agentic_advisor(user_input):
     """
-    The multi-agent advisor chain:
+    Multi-agent advisor chain:
       1. LLM1 analyzes the user input.
       2. LLM2 generates asset suggestions based on live data.
-      3. LLM3 re-evaluates suggestions against macro conditions.
-    If macro conditions aren’t favorable, the loop will iterate (up to 3 times) asking for more conservative recommendations.
+      3. LLM3 re-evaluates suggestions against macroeconomic conditions and technical analysis.
+         If conditions aren’t favorable, the loop will iterate (up to 3 times) for more conservative recommendations.
     """
     # Step 1: Analyze user intent
     analysis_prompt = f"Analyze the following user input for investment advice, risk appetite, and expected returns: '{user_input}'. Summarize the key factors and preferences."
@@ -541,10 +571,11 @@ def agentic_advisor(user_input):
     """
     llm2_response = call_openai_llm(suggestion_prompt, system="You are a financial advisor specializing in asset recommendations.")
     
-    # Step 3: Evaluate against macroeconomic conditions
+    # Step 3: Evaluate against macroeconomic conditions and technical analysis
     macro_conditions = get_macro_conditions()
+    tech_analysis = get_technical_analysis_summaries(asset_data)
     evaluation_prompt = f"""
-    Evaluate the following asset suggestions against current macroeconomic conditions:
+    Evaluate the following asset suggestions against current macroeconomic conditions and technical analysis results:
     
     Asset Suggestions:
     {llm2_response}
@@ -552,20 +583,21 @@ def agentic_advisor(user_input):
     Macroeconomic Conditions:
     {macro_conditions}
     
-    If conditions are favorable for risk assets (e.g., low US interest rates, low 10Y yield, decreasing DXY, and no ongoing wars), confirm the recommendations.
+    Technical Analysis:
+    {tech_analysis}
+    
+    If conditions are favorable for risk assets (e.g., low US interest rates, low 10Y yield, decreasing DXY, no ongoing wars, and positive technical indicators such as oversold RSI or bullish moving average crossovers), confirm the recommendations.
     Otherwise, adjust the suggestions to be more conservative.
     """
-    llm3_response = call_openai_llm(evaluation_prompt, system="You are a senior financial strategist specialized in macroeconomic analysis and risk management.")
+    llm3_response = call_openai_llm(evaluation_prompt, system="You are a senior financial strategist specialized in macroeconomic analysis, technical analysis, and risk management.")
     
-    # Loop for re-adjustment (up to 3 iterations) if macro conditions demand more conservative suggestions.
     iterations = 0
     while iterations < 3:
         if "conservative" not in llm3_response.lower():
-            # If the re-evaluation does not call for adjustments, break out of the loop.
             break
         else:
             re_adjust_prompt = f"""
-            The current macroeconomic conditions indicate a need for more conservative asset recommendations.
+            The current macroeconomic conditions and technical analysis indicate a need for more conservative asset recommendations.
             Adjust the previous suggestions accordingly.
             
             Previous Asset Suggestions:
@@ -573,18 +605,24 @@ def agentic_advisor(user_input):
             
             Macroeconomic Conditions:
             {macro_conditions}
+            
+            Technical Analysis:
+            {tech_analysis}
             """
             llm2_response = call_openai_llm(re_adjust_prompt, system="You are a financial advisor specializing in asset recommendations.")
             evaluation_prompt = f"""
-            Evaluate the following adjusted asset suggestions against current macroeconomic conditions:
+            Evaluate the following adjusted asset suggestions against current macroeconomic conditions and technical analysis results:
             
             Adjusted Asset Suggestions:
             {llm2_response}
             
             Macroeconomic Conditions:
             {macro_conditions}
+            
+            Technical Analysis:
+            {tech_analysis}
             """
-            llm3_response = call_openai_llm(evaluation_prompt, system="You are a senior financial strategist specialized in macroeconomic analysis and risk management.")
+            llm3_response = call_openai_llm(evaluation_prompt, system="You are a senior financial strategist specialized in macroeconomic analysis, technical analysis, and risk management.")
             iterations += 1
 
     return llm3_response
@@ -605,13 +643,11 @@ def agentic_chat_interface():
 
 st.markdown("# Welcome to Your Personal Finance Assistant 💰")
 
-# Load asset data on initial load (CSV caching)
 if not st.session_state['asset_data']:
     with st.spinner('Loading stock prices...'):
         st.session_state['asset_data'] = get_asset_data()
         st.session_state['asset_data_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-# Display update info and update button
 col1, col2 = st.columns([8, 2])
 with col1:
     pass
@@ -661,7 +697,6 @@ with st.sidebar:
             st.session_state['financial_data'] = financial_data_input
             st.success("Financial data updated.")
 
-# Create tabs for different functionalities
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["News", "Assets", "Chat", "Tools", "Agentic Advisor"])
 
 with tab1:
