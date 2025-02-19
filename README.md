@@ -1,90 +1,81 @@
 # Personal Finance Assistant Bot
 
-## Abstract
+## Overview
 
-The Personal Finance Assistant Bot is an AI-driven platform designed to empower users with effective personal finance management tools. Leveraging OpenAI's GPT-4 model, LangChain, and real-time financial data, this bot provides personalized financial advice, asset tracking, and live market insights. Key features include a conversational chatbot, real-time stock performance tracking, daily financial news, interactive budgeting tools, and a Retrieval-Augmented Generation (RAG) system for tailored insights using uploaded financial documents.
+This project is a multi-agent finance assistant that integrates real-time financial data (stocks, cryptocurrencies, commodities, and news) with both macroeconomic and technical analysis to provide personalized investment advice. The system leverages multiple Large Language Models (LLMs) to process user input, generate recommendations, and refine those recommendations based on live data and technical indicators.
 
-## Objective
+## Workflow & Ideology
 
-### Key Objectives:
-1. **Financial Knowledge Empowerment**: Enable informed financial decision-making with personalized insights.
-2. **Real-Time Market Insights**: Provide live stock data and financial news for timely updates.
-3. **Interactive Tools for Finance Management**: Support effective tracking of expenses, savings, and investments.
-4. **Enhanced User Experience**: Build an intuitive platform for easy personal finance management.
+1. **Data Ingestion & Caching**  
+   - **Stock Data:** Fetched from Alpha Vantage and cached in a CSV file (with a time-to-live of 10 minutes).  
+   - **News & Market Data:** Real-time news is retrieved via NewsAPI; cryptocurrency data is fetched from CoinMarketCap; commodity prices are obtained using Yahoo Finance.
+   - **Document Processing:** PDF documents are processed and converted into a vector store for additional context when needed.
 
+2. **User Interaction**  
+   - The user provides financial details and queries through a chat interface and forms.
+   - Users can also upload their own documents or process existing ones for enhanced context.
 
-## Implementation
+3. **Multi-Agent Chain of LLMs**  
+   - **Agent 1 (Analysis Agent):** Analyzes the user query to extract investment goals, risk appetite, and expected returns.
+   - **Agent 2 (Recommendation Agent):** Uses live market data (stocks, crypto, commodities, news) to generate asset recommendations.
+   - **Agent 3 (Evaluation Agent):** Evaluates the recommendations against:
+     - **Macroeconomic Conditions:** Factors such as US interest rates, the 10Y Treasury yield, DXY trends, and geopolitical events.
+     - **Technical Analysis:** Incorporates key technical indicators (RSI, moving averages, Bollinger Bands) and looks for technical patterns (e.g., falling wedge, head and shoulders, double tops/bottoms, Fibonacci extensions) on both daily and weekly timeframes.
+   - The evaluation may iterate (up to 3 times) to adjust recommendations if market conditions warrant a more conservative approach.
 
-### Technologies Used
-- **Programming Language**: Python
-- **Framework**: Streamlit for interactive web app development
-- **APIs and Libraries**:
-  - **OpenAI API**: For generating personalized financial responses.
-  - **LangChain (RAG)**: Processes user-uploaded documents for context-aware responses.
-  - **Yahoo Finance (`yfinance`)**: Fetches live stock prices and historical data.
-  - **NewsAPI**: Retrieves trending financial news.
-  - **PyPDF2**: Processes PDF documents for custom insights.
-  - **Chroma Vector Store**: Manages document-based embeddings for RAG.
-  - **CoinGecko API**: Provides cryptocurrency pricing.
-- **Data Visualization**: Streamlit's charting and Matplotlib.
-- **Environment Management**: `dotenv` for secure environment variable handling.
+4. **Technical Analysis Module**  
+   - Utilizes the `ta` library to compute:
+     - **RSI (14-period)**
+     - **20-day Simple Moving Average (SMA20)**
+     - **Bollinger Bands (20-day window, 2 standard deviations)**
+   - Analysis is performed on both daily and weekly timeframes to provide a comprehensive view.
+   - The results help determine which asset charts are technically stronger, adding another layer of decision-making to the recommendations.
 
-### Key Components
-
-1. **Financial Data Input**: Users provide financial details (e.g., income, expenses) to personalize recommendations.
-2. **Document Upload and RAG**: Users upload PDFs like statements or plans, which the bot processes to provide specific, context-driven insights.
-3. **Live Market Data**: Real-time stock prices are available through the asset tracker, including historical charts and alerts for price changes.
-4. **Interactive Chatbot**: The GPT-4-powered chatbot responds to finance queries using user data, RAG insights, and live market info.
-5. **Financial News Updates**: Displays top financial news to keep users informed about market trends.
-6. **Financial Tools**: Includes budgeting and expense tracking to calculate savings and manage spending.
-
-## Impact
-
-The bot aims to:
-- **Empower Financial Decision-Making**: Provides data-driven recommendations aligned with user goals.
-- **Increase User Engagement**: Real-time updates and interactive tools keep users actively managing their finances.
-- **Foster Financial Education**: Simplifies complex financial concepts for better financial literacy.
-- **Enhance User Confidence**: Encourages informed financial management for improved financial health.
-
+5. **Final Output**  
+   - The assistant provides a final, refined recommendation that considers user input, live market data, macroeconomic conditions, and technical analysis.
 
 ## Features
 
-### 1. **Financial Details Input**
-- **Purpose**: To personalize recommendations based on user-provided data.
-- **Functionality**: Users input savings, expenses, and goals, which inform tailored chatbot responses.
+- **Real-Time Financial Data:** Live updates for stocks, crypto, commodities, and news.
+- **Technical Analysis:** Automated computation of key technical indicators and patterns.
+- **Multi-Agent LLM Workflow:** A chain of LLMs that process, recommend, and refine investment advice.
+- **User-Friendly Interface:** Built with Streamlit, featuring chat interfaces, data visualization, and interactive forms.
+- **Document Processing:** Capability to upload and process PDFs for additional contextual insights.
 
-### 2. **PDF Upload with RAG**
-- **Purpose**: Customizes insights using user-uploaded financial documents.
-- **Functionality**: Extracts data from PDFs (e.g., statements), which feeds into the RAG system for relevant, user-specific responses.
+## Installation & Setup
 
-### 3. **Daily Financial News**
-- **Purpose**: Keeps users informed of market developments.
-- **Functionality**: Displays top daily news headlines, clickable for full articles.
+1. **Clone the Repository:**
+   ```bash
+   git clone <https://github.com/KashyapNadendla/finance-bot>
+   cd finance-bot
 
-### 4. **Asset Tracker with Real-Time Data**
-- **Purpose**: Enables users to monitor asset performance with live data.
-- **Functionality**: Displays real-time stock prices, historical charts, and alerts for significant price changes.
+2. **Install Dependencies:**
+  ```bash
+  pip install -r requirements.txt
+  ```
 
-### 5. **Interactive Chatbot with RAG**
-- **Purpose**: Provides personalized responses using real-time data and document-based insights.
-- **Functionality**: The chatbot integrates user financial data, live stock info, and uploaded documents for well-rounded advice.
+3. **Configure Environment Variables:**
+  Create a .env file in the project root with the following keys:
+  ```
+  OPENAI_API_KEY=your_openai_api_key
+  NEWS_API_KEY=your_news_api_key
+  CMC_API_KEY=your_coinmarketcap_api_key
+  ALPHA_VANTAGE_API_KEY=your_alpha_vantage_api_key
+  ```
 
-### 6. **Budgeting and Savings Tools**
-- **Purpose**: Assists with tracking monthly savings and expenses.
-- **Functionality**: Users input income and expenses; the tool calculates and displays monthly savings or deficits.
+4. **Run the Application:**
+  ```bash
+  streamlit run app.py
+  ```
 
+## Usage
+- Chat Interface: Interact with the assistant through a conversational interface to ask questions and receive investment advice.
+- Asset Data & Charts: View real-time asset data, update stock prices, and see price charts.
+- Agentic Advisor: Submit an investment query to receive multi-layered recommendations that incorporate macroeconomic and technical analysis.
+- Document Upload & Processing: Upload your own PDF documents to enhance the context for recommendations.
+- Budgeting Tool: Manage monthly income and expenses with an integrated budgeting calculator.
 
-## Future Improvements
-
-1. **Expanded Asset Coverage**: Include foreign exchanges and additional asset classes.
-2. **Advanced Data Visualization**: Add a news ticker and customizable dashboards.
-3. **Enhanced Personalization**: Support multi-language options and secure user accounts for saved preferences.
-4. **Macro Financial Monitoring**: Display economic indicators and market sentiment analysis.
-5. **Financial Education**: Offer tutorials and live webinars for skill-building in personal finance.
-
-
-## Conclusion
-
-The Personal Finance Assistant Bot combines personalized advice, live market data, and interactive financial tools to empower users in managing their finances. By leveraging RAG, real-time stock updates, and AI-powered insights, the bot simplifies complex finance topics, making financial management more accessible and effective.
-
-*This project highlights the power of AI in transforming financial literacy and accessibility, contributing to healthier financial habits and increased user engagement.* 
+## Future Enhancements
+- Advanced pattern recognition algorithms for technical chart patterns.
+- Integration of additional data sources and asset classes.
+- Improved modularity and error handling for even greater robustness.
