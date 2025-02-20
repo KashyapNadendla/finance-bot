@@ -11,12 +11,32 @@ import ta  # Technical Analysis library (install via pip install ta)
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# --- Langchain and Search/Trends Tools ---
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from newsapi import NewsApiClient
 from newsapi.newsapi_exception import NewsAPIException
 from openai import OpenAI  # Using OpenAI's client
+
+# Built-in AlphaVantage tool (if available in your Langchain version)
+try:
+    from langchain.tools.alpha_vantage import AlphaVantageTool
+    alpha_vantage_tool = AlphaVantageTool(api_key=os.getenv("ALPHA_VANTAGE_API_KEY"))
+except ImportError:
+    alpha_vantage_tool = None
+
+# Use DuckDuckGo search utility from Langchain for free search
+try:
+    from langchain.utilities import DuckDuckGoSearchResults
+    duckduckgo = DuckDuckGoSearchResults()
+except ImportError:
+    duckduckgo = None
+
+# Google Trends via pytrends
+from pytrends.request import TrendReq
+pytrends = TrendReq(hl='en-US', tz=360)
 
 # ---------------------- INITIAL SETUP ---------------------- #
 
@@ -112,15 +132,13 @@ def display_finance_news():
 def fetch_stock_data(ticker):
     base_url = "https://www.alphavantage.co/query"
     
-    # Fetch stock prices
+    # Parameters for stock price and company overview
     price_params = {
         "function": "TIME_SERIES_INTRADAY",
         "symbol": ticker,
         "interval": "5min",
         "apikey": ALPHA_VANTAGE_API_KEY
     }
-    
-    # Fetch company overview (for Dividend Yield)
     overview_params = {
         "function": "OVERVIEW",
         "symbol": ticker,
@@ -128,7 +146,6 @@ def fetch_stock_data(ticker):
     }
 
     try:
-        # Fetch stock price data
         price_response = requests.get(base_url, params=price_params)
         price_data = price_response.json()
         time_series_key = "Time Series (5min)"
@@ -142,7 +159,6 @@ def fetch_stock_data(ticker):
         close_price = float(latest_data["4. close"])
         price_change_today = ((close_price - open_price) / open_price) * 100
 
-        # Fetch dividend yield
         overview_response = requests.get(base_url, params=overview_params)
         overview_data = overview_response.json()
         dividend_yield = overview_data.get("DividendYield", "N/A")
@@ -156,7 +172,6 @@ def fetch_stock_data(ticker):
             "Price Change (Today)": f"{price_change_today:.2f}%",
             "Dividend Yield": dividend_yield
         }
-
     except Exception as e:
         print(f"Error retrieving data for {ticker}: {e}")
         return None
@@ -164,7 +179,6 @@ def fetch_stock_data(ticker):
 def scout_assets():
     tickers = [
         "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSLA", "AVGO"
-        # ... add more tickers as needed
     ]
     asset_data = []
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -215,11 +229,7 @@ def display_assets():
         df = pd.DataFrame(asset_data)
         st.dataframe(df)
         tickers = df['Ticker'].tolist()
-        selected_assets = st.multiselect(
-            "Select your preferred assets",
-            tickers,
-            default=st.session_state['preferred_assets']
-        )
+        selected_assets = st.multiselect("Select your preferred assets", tickers, default=st.session_state['preferred_assets'])
         st.session_state['preferred_assets'] = selected_assets
         if selected_assets:
             st.write("Your preferred assets:")
@@ -231,12 +241,7 @@ def display_assets():
 
 def check_price_alerts():
     if st.session_state.get('preferred_assets'):
-        alert_threshold = st.slider(
-            "Set price change alert threshold (%)",
-            min_value=0.0,
-            max_value=10.0,
-            value=5.0
-        )
+        alert_threshold = st.slider("Set price change alert threshold (%)", min_value=0.0, max_value=10.0, value=5.0)
         for asset in st.session_state['asset_data']:
             if asset['Ticker'] in st.session_state['preferred_assets']:
                 price_change = float(asset['Price Change (Today)'].strip('%'))
@@ -279,7 +284,6 @@ def display_chart_for_asset(message):
 def format_asset_suggestions(suggestions):
     if not suggestions:
         return "No assets currently meet the criteria for recommendation."
-    
     suggestion_text = "Here are some asset suggestions based on recent performance:\n\n"
     for asset in suggestions:
         suggestion_text += (
@@ -290,7 +294,6 @@ def format_asset_suggestions(suggestions):
         if "Dividend Yield" in asset and asset["Dividend Yield"] != "N/A":
             suggestion_text += f"- Dividend Yield: {asset['Dividend Yield']}\n"
         suggestion_text += "\n"
-    
     return suggestion_text
 
 def generate_response(financial_data, user_message, vector_store):
@@ -357,10 +360,8 @@ def chat_interface():
 
 def budgeting_tool():
     st.header("Budgeting Tool")
-    income = st.number_input("Monthly Income", min_value=0.0, step=100.0,
-                             help="Your total monthly income after taxes.")
-    expenses = st.number_input("Monthly Expenses", min_value=0.0, step=100.0,
-                               help="Your total monthly expenses.")
+    income = st.number_input("Monthly Income", min_value=0.0, step=100.0, help="Your total monthly income after taxes.")
+    expenses = st.number_input("Monthly Expenses", min_value=0.0, step=100.0, help="Your total monthly expenses.")
     savings = income - expenses
     if savings >= 0:
         st.success(f"Monthly Savings: ${savings:.2f}")
@@ -427,7 +428,6 @@ def perform_technical_analysis(ticker, period="1y", interval="1d"):
     hist = stock.history(period=period, interval=interval)
     if hist.empty:
         return "No data available"
-    
     try:
         rsi = ta.momentum.RSIIndicator(hist["Close"], window=14).rsi().iloc[-1]
     except Exception as e:
@@ -437,7 +437,6 @@ def perform_technical_analysis(ticker, period="1y", interval="1d"):
     bb_upper = bb_indicator.bollinger_hband().iloc[-1]
     bb_lower = bb_indicator.bollinger_lband().iloc[-1]
     latest_close = hist["Close"].iloc[-1]
-    
     if rsi is not None:
         summary = f"Price: ${latest_close:.2f}, RSI: {rsi:.2f}, SMA20: ${sma20:.2f}, Bollinger Bands: Upper=${bb_upper:.2f}, Lower=${bb_lower:.2f}"
     else:
@@ -455,6 +454,25 @@ def get_technical_analysis_summaries(asset_data):
         weekly_summary = perform_technical_analysis(ticker, period="2y", interval="1wk")
         summaries += f"{ticker} Technical Analysis:\nDaily: {daily_summary}\nWeekly: {weekly_summary}\n\n"
     return summaries
+
+# ---------------------- GOOGLE TRENDS FUNCTION ---------------------- #
+
+def fetch_google_trends(keyword="finance"):
+    """
+    Uses pytrends to fetch interest over time data for the given keyword.
+    Returns a summary string of current trends.
+    """
+    try:
+        pytrends.build_payload([keyword], cat=0, timeframe='now 7-d', geo='', gprop='')
+        trends = pytrends.interest_over_time()
+        if trends.empty:
+            return f"No trends data available for {keyword}."
+        latest = trends[keyword].iloc[-1]
+        avg = trends[keyword].mean()
+        summary = f"Latest interest for '{keyword}' is {latest} (average over last 7 days: {avg:.2f})."
+        return summary
+    except Exception as e:
+        return f"Error fetching trends data: {e}"
 
 # ---------------------- AGENTIC ADVISOR FUNCTIONS ---------------------- #
 
@@ -478,11 +496,7 @@ def get_commodities_data():
     Fetch live commodities data for Gold, Crude Oil, and Silver.
     """
     commodities = {}
-    symbols = {
-        "Gold": "GC=F",
-        "Crude Oil": "CL=F",
-        "Silver": "SI=F"
-    }
+    symbols = {"Gold": "GC=F", "Crude Oil": "CL=F", "Silver": "SI=F"}
     for name, symbol in symbols.items():
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period="1d", interval="1m")
@@ -509,8 +523,21 @@ def get_macro_conditions():
     except Exception as e:
         conditions["10Y Treasury Yield"] = "N/A"
     
+    # try:
+    #     dxy = yf.Ticker("DX-Y.NYB")
+    #     hist = dxy.history(period="5d")
+    #     if not hist.empty:
+    #         prices = hist['Close']
+    #         trend = "decreasing" if prices.iloc[-1] < prices.iloc[0] else "increasing"
+    #         conditions["DXY Trend"] = trend
+    #         conditions["DXY Latest"] = prices.iloc[-1]
+    #     else:
+    #         conditions["DXY Trend"] = "N/A"
+    # except Exception as e:
+    #     conditions["DXY Trend"] = "N/A"
+
     try:
-        dxy = yf.Ticker("DX-Y.NYB")
+        dxy = yf.Ticker("^DXY")
         hist = dxy.history(period="5d")
         if not hist.empty:
             prices = hist['Close']
@@ -521,6 +548,7 @@ def get_macro_conditions():
             conditions["DXY Trend"] = "N/A"
     except Exception as e:
         conditions["DXY Trend"] = "N/A"
+
     
     if isinstance(conditions.get("10Y Treasury Yield"), (int, float)) and conditions["10Y Treasury Yield"] < 3.0:
         conditions["Interest Rates"] = "Low"
@@ -530,8 +558,10 @@ def get_macro_conditions():
     articles = fetch_finance_news()
     war_flag = any("war" in article['title'].lower() or "conflict" in article['title'].lower() for article in articles)
     conditions["War Status"] = "No ongoing wars" if not war_flag else "Potential conflict detected"
-    
-    conditions_str = f"10Y Treasury Yield: {conditions.get('10Y Treasury Yield', 'N/A')}, DXY Trend: {conditions.get('DXY Trend', 'N/A')}, Interest Rates: {conditions.get('Interest Rates', 'N/A')}, War Status: {conditions.get('War Status', 'N/A')}."
+    conditions_str = (f"10Y Treasury Yield: {conditions.get('10Y Treasury Yield', 'N/A')}, "
+                      f"DXY Trend: {conditions.get('DXY Trend', 'N/A')}, "
+                      f"Interest Rates: {conditions.get('Interest Rates', 'N/A')}, "
+                      f"War Status: {conditions.get('War Status', 'N/A')}.")
     return conditions_str
 
 def agentic_advisor(user_input):
@@ -539,7 +569,7 @@ def agentic_advisor(user_input):
     Multi-agent advisor chain:
       1. LLM1 analyzes the user input.
       2. LLM2 generates asset suggestions based on live data.
-      3. LLM3 re-evaluates suggestions against macroeconomic conditions and technical analysis.
+      3. LLM3 re-evaluates suggestions against macroeconomic conditions, technical analysis, and Google Trends data.
          If conditions aren’t favorable, the loop will iterate (up to 3 times) for more conservative recommendations.
     """
     # Step 1: Analyze user intent
@@ -551,11 +581,14 @@ def agentic_advisor(user_input):
     asset_data = get_asset_data()
     crypto_data = get_top_movers()
     commodities_data = get_commodities_data()
+    trends_data = fetch_google_trends("finance")
+    
     live_data_str = (
         f"News: {live_news}\n"
         f"Stocks: {format_asset_suggestions(asset_data)}\n"
         f"Cryptocurrencies: {crypto_data}\n"
-        f"Commodities: {commodities_data}"
+        f"Commodities: {commodities_data}\n"
+        f"Google Trends: {trends_data}"
     )
     
     suggestion_prompt = f"""
@@ -571,11 +604,11 @@ def agentic_advisor(user_input):
     """
     llm2_response = call_openai_llm(suggestion_prompt, system="You are a financial advisor specializing in asset recommendations.")
     
-    # Step 3: Evaluate against macroeconomic conditions and technical analysis
+    # Step 3: Evaluate against macroeconomic conditions, technical analysis, and trends
     macro_conditions = get_macro_conditions()
     tech_analysis = get_technical_analysis_summaries(asset_data)
     evaluation_prompt = f"""
-    Evaluate the following asset suggestions against current macroeconomic conditions and technical analysis results:
+    Evaluate the following asset suggestions against current macroeconomic conditions, technical analysis, and Google Trends data:
     
     Asset Suggestions:
     {llm2_response}
@@ -586,7 +619,10 @@ def agentic_advisor(user_input):
     Technical Analysis:
     {tech_analysis}
     
-    If conditions are favorable for risk assets (e.g., low US interest rates, low 10Y yield, decreasing DXY, no ongoing wars, and positive technical indicators such as oversold RSI or bullish moving average crossovers), confirm the recommendations.
+    Google Trends Data:
+    {trends_data}
+    
+    If conditions are favorable for risk assets (e.g., low US interest rates, low 10Y yield, decreasing DXY, no ongoing wars, and positive technical indicators), confirm the recommendations.
     Otherwise, adjust the suggestions to be more conservative.
     """
     llm3_response = call_openai_llm(evaluation_prompt, system="You are a senior financial strategist specialized in macroeconomic analysis, technical analysis, and risk management.")
@@ -597,7 +633,7 @@ def agentic_advisor(user_input):
             break
         else:
             re_adjust_prompt = f"""
-            The current macroeconomic conditions and technical analysis indicate a need for more conservative asset recommendations.
+            The current macroeconomic conditions, technical analysis, and trends indicate a need for more conservative asset recommendations.
             Adjust the previous suggestions accordingly.
             
             Previous Asset Suggestions:
@@ -608,10 +644,13 @@ def agentic_advisor(user_input):
             
             Technical Analysis:
             {tech_analysis}
+            
+            Google Trends Data:
+            {trends_data}
             """
             llm2_response = call_openai_llm(re_adjust_prompt, system="You are a financial advisor specializing in asset recommendations.")
             evaluation_prompt = f"""
-            Evaluate the following adjusted asset suggestions against current macroeconomic conditions and technical analysis results:
+            Evaluate the following adjusted asset suggestions against current macroeconomic conditions, technical analysis, and trends:
             
             Adjusted Asset Suggestions:
             {llm2_response}
@@ -621,6 +660,9 @@ def agentic_advisor(user_input):
             
             Technical Analysis:
             {tech_analysis}
+            
+            Google Trends Data:
+            {trends_data}
             """
             llm3_response = call_openai_llm(evaluation_prompt, system="You are a senior financial strategist specialized in macroeconomic analysis, technical analysis, and risk management.")
             iterations += 1
@@ -688,9 +730,7 @@ with st.sidebar:
     st.header("Enter Your Financial Data")
     with st.form("financial_data_form"):
         st.write("Please provide your financial data.")
-        financial_data_input = st.text_area("Financial Data",
-                                            value=st.session_state['financial_data'],
-                                            height=200,
+        financial_data_input = st.text_area("Financial Data", value=st.session_state['financial_data'], height=200,
                                             help="Enter any financial information you would like the assistant to consider.")
         submitted = st.form_submit_button("Submit")
         if submitted:
