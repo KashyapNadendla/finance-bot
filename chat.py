@@ -1,44 +1,49 @@
 import streamlit as st
 import re
 import yfinance as yf
-from openai import OpenAI
-from vectorstore_utils import similarity_search_docs
+import stocks
 
-def chat_interface():
-    st.header("Chat with Your Personal Finance Assistant")
+def generate_response(financial_data, user_message, vector_store, openai_client):
+    if st.session_state.get('asset_data'):
+        asset_suggestions = st.session_state['asset_data']
+        formatted_suggestions = stocks.format_asset_suggestions(asset_suggestions)
+    else:
+        formatted_suggestions = "No asset data available."
+    query = financial_data + "\n" + user_message
+    if vector_store:
+        docs = vector_store.similarity_search(query, k=3)
+        context = "\n".join([doc.page_content for doc in docs])
+    else:
+        context = ""
 
-    # Display chat messages in session state
-    for message in st.session_state['chat_history']:
-        with st.chat_message(message['role']):
-            st.markdown(message['content'])
-            if 'chart_data' in message:
-                st.line_chart(message['chart_data'])
+    prompt = f"""
+    Based on the user's financial data, the following asset suggestions, and the context from documents:
 
-    user_input = st.chat_input("You:")
-    if user_input:
-        # The user's message
-        st.session_state['chat_history'].append({"role": "user", "content": user_input})
+    Financial Data:
+    {financial_data}
 
-        # Possibly fetch chart data if user requests: e.g. "price of TSLA"
-        chart_data = display_chart_for_asset(user_input)
+    Asset Suggestions:
+    {formatted_suggestions}
 
-        # Generate an assistant response from OpenAI
-        assistant_response = generate_assistant_response(user_input)
-        assistant_message = {"role": "assistant", "content": assistant_response}
+    Context from documents:
+    {context}
 
-        if chart_data is not None:
-            assistant_message['chart_data'] = chart_data
+    User Message:
+    {user_message}
 
-        st.session_state['chat_history'].append(assistant_message)
+    Provide a helpful and informative response as a personal finance assistant. Include prices of top movers in stocks.
+    """
+    completion = openai_client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a financial assistant providing advice based on user data and market trends."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    response = completion.choices[0].message.content
+    return response
 
-        # Display last two messages
-        for msg in st.session_state['chat_history'][-2:]:
-            with st.chat_message(msg['role']):
-                st.markdown(msg['content'])
-                if 'chart_data' in msg:
-                    st.line_chart(msg['chart_data'])
-
-def display_chart_for_asset(message: str):
+def display_chart_for_asset(message):
     pattern = r'\b(?:price|chart)\s+(?:of\s+)?([A-Za-z0-9.\-]+)\b'
     matches = re.findall(pattern, message, re.IGNORECASE)
     if matches:
@@ -50,14 +55,40 @@ def display_chart_for_asset(message: str):
                 return hist['Close']
             else:
                 st.write(f"No data found for ticker {ticker}")
+                return None
         except Exception as e:
             st.write(f"Error retrieving data for {ticker}: {e}")
-    return None
+            return None
+    else:
+        return None
 
-def generate_assistant_response(user_input: str) -> str:
-    # Example logic:
-    # 1) Do a vector store similarity search if needed
-    # 2) Construct a prompt with the best context
-    # 3) Call OpenAI's API for the final response
-    # We'll do a mock response here:
-    return "This is a placeholder response from OpenAI. (Integrate your 'generate_response' logic here.)"
+def chat_interface(openai_api_key):
+    from openai import OpenAI
+    openai_client = OpenAI(api_key=openai_api_key)
+
+    st.header("Chat with Your Personal Finance Assistant")
+    for message in st.session_state['chat_history']:
+        with st.chat_message(message['role']):
+            st.markdown(message['content'])
+            if 'chart_data' in message:
+                st.line_chart(message['chart_data'])
+
+    user_input = st.chat_input("You:")
+    if user_input:
+        financial_data = st.session_state['financial_data']
+        vector_store = st.session_state['vector_store']
+        response = generate_response(financial_data, user_input, vector_store, openai_client)
+
+        chart_data = display_chart_for_asset(user_input)
+        st.session_state['chat_history'].append({"role": "user", "content": user_input})
+
+        assistant_message = {"role": "assistant", "content": response}
+        if chart_data is not None:
+            assistant_message['chart_data'] = chart_data
+        st.session_state['chat_history'].append(assistant_message)
+
+        for msg in st.session_state['chat_history'][-2:]:
+            with st.chat_message(msg['role']):
+                st.markdown(msg['content'])
+                if 'chart_data' in msg:
+                    st.line_chart(msg['chart_data'])
