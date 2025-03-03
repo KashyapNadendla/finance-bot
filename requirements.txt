@@ -20,3 +20,4 @@ numpy
 tweepy
 pandas_ta
 langchain_openai
+ta
