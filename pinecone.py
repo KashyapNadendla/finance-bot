@@ -1,44 +1,55 @@
-from pinecone import Pinecone, ServerlessSpec
+import os
+from dotenv import load_dotenv
+import pinecone
+from pinecone import Pinecone
+from alpha_vantage.timeseries import TimeSeries
 
-pc = Pinecone(api_key="YOUR_API_KEY")
+# Load API keys from .env
+from dotenv import load_dotenv
+load_dotenv()
 
-index_name = "finance-bot"
+import os
 
-pc.create_index(
-    name=index_name,
-    dimension=3072, 
-    metric="cosine", 
-        cloud="aws",
-        region="us-east-1"
-    ) 
-)
+# Initialize Pinecone
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
 
+pinecone.init(api_key=pinecone_api_key, environment="us-east-1-aws")
+
+index_name = "daily-market-data"
+
+# Check if index exists; if not, create it
+if index_name not in pinecone.list_indexes():
+    pinecone.create_index(
+        name=index_name,
+        dimension=3072,  # dimension based on multilingual-e5-large embeddings
+        metric="cosine"
+    )
+
+index = pinecone.Index(index_name)
+
+# Sample placeholder - Replace with real-time data fetched from Alpha Vantage
 data = [
-   
+    {'id': 'AAPL-2025-03-06', 'text': 'Apple stock closed at 150 USD with a high of 152 USD...'},
+    {'id': 'BTC-2025-03-06', 'text': 'Bitcoin closed at 45000 USD, volume increased by 10%...'},
+    # Additional data from forex, commodities, etc.
 ]
 
-embeddings = pc.inference.embed(
+# Generate embeddings using Pinecone inference
+embeddings_response = pinecone.embed(
     model="multilingual-e5-large",
-    inputs=[d['text'] for d in data],
-    parameters={"input_type": "passage", "truncate": "END"}
+    inputs=[item['text'] for item in data],
+    parameters={"input_type": "passage"}
 )
-print(embeddings[0])
 
-# Wait for the index to be ready
-while not pc.describe_index(index_name).status['ready']:
-    time.sleep(1)
+vectors = [
+    {
+        "id": item['id'],
+        "values": embedding,
+        "metadata": {'text': item['text']}
+    }
+    for item, embedding in zip(data, embeddings['embeddings'])
+]
 
-index = pc.Index(index_name)
-
-vectors = []
-for d, e in zip(data, embeddings):
-    vectors.append({
-        "id": d['id'],
-        "values": e['values'],
-        "metadata": {'text': d['text']}
-    })
-
-index.upsert(
-    vectors=vectors,
-    namespace="ns1"
-)
+# Upsert data into Pinecone
+pinecone_index = pinecone.Index(index_name)
+pinecone.upsert(vectors=vectors, namespace="market_data")
