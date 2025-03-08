@@ -1,0 +1,13 @@
+Daily Alpha Vantage Data (Stocks, Crypto, Forex, Commodities) 
+    ↓
+[Embedding Generation] → Pinecone Vector Store
+│                             │
+│                             ├─> `TA.py` ── Technical Indicators ──┐
+│                             │                                     │
+│                             │                                     │
+│                      ┌──────┴──────┐                              │
+└─► [ Pinecone DB ] ◄──┤ analysis.py ├──► [ Aggregated Insights ] ──┤
+                       └──────┬──────┘                              │
+                              │                                     │
+                      [ Fundamental/Macro ] ───────────────► [ agentic.py ]\n\n                             
+
