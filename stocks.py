@@ -16,7 +16,6 @@ TICKERS = ["AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BRK.B", "TSM", "TSL
 
 def debug_log(message):
     """Helper to log debug messages to the console."""
-    print(message)
 
 def get_api_key():
     """Retrieve the Alpha Vantage API key from the environment."""
@@ -37,8 +36,6 @@ def fetch_stock_price(ticker):
     if not API_KEY:
         return None
 
-    # Debug: Log without printing API key
-    debug_log(f"Fetching daily price for {ticker}.")
 
     params = {
         "function": "TIME_SERIES_DAILY",

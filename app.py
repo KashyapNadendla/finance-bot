@@ -132,7 +132,7 @@ def main():
 
         st.subheader("Top Cryptocurrency Movers (24h Change)")
         cmc_key = st.session_state.get("CMC_API_KEY", None)
-        crypto_data = crypto.get_top_movers(cmc_key)
+        crypto_data = crypto.get_top_movers()
         if crypto_data:
             df_crypto = pd.DataFrame(crypto_data)
             st.dataframe(df_crypto)
