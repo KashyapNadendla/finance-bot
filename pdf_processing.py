@@ -40,3 +40,10 @@ def create_vector_store(texts, openai_api_key):
     embeddings = OpenAIEmbeddings(api_key=openai_api_key)
     vector_store = FAISS.from_texts(texts_chunks, embeddings)
     return vector_store
+
+def process_pdfs(folder_path):
+    """
+    Process PDFs in the given folder.
+    This is an alias for load_and_process_pdfs.
+    """
+    return load_and_process_pdfs(folder_path)

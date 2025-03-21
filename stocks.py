@@ -281,3 +281,28 @@ def display_asset_charts():
             st.info("No chart data available for the selected ticker.")
         else:
             st.line_chart(hist_df["Close"])
+
+
+def scout_assets(ticker_list):
+    """
+    Fetch stock data for the given tickers.
+    This function calls get_asset_data() and then filters the results.
+    """
+    all_data = get_asset_data()
+    # Filter the asset data for tickers in the provided list.
+    filtered = [asset for asset in all_data if asset.get("Ticker") in ticker_list]
+    return filtered
+
+def format_asset_suggestions(asset_data):
+    """
+    Format asset data suggestions for presentation.
+    """
+    if not asset_data:
+        return "No asset data available."
+    suggestions = ""
+    for asset in asset_data:
+        ticker = asset.get("Ticker", "N/A")
+        price = asset.get("Current Price", "N/A")
+        change = asset.get("Price Change (Today)", "N/A")
+        suggestions += f"{ticker}: {price} ({change})\n"
+    return suggestions

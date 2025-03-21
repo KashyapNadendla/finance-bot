@@ -9,5 +9,5 @@ Daily Alpha Vantage Data (Stocks, Crypto, Forex, Commodities)
 └─► [ Pinecone DB ] ◄──┤ analysis.py ├──► [ Aggregated Insights ] ──┤
                        └──────┬──────┘                              │
                               │                                     │
-                      [ Fundamental/Macro ] ───────────────► [ agentic.py ]\n\n                             
+                      [ Fundamental/Macro ] ───────────────► [ agentic.py ]                  
 
