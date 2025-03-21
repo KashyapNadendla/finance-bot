@@ -1,4 +1,8 @@
 import streamlit as st
+import numpy as np
+if not hasattr(np, 'NaN'):
+    np.NaN = np.nan
+
 import os
 import pandas as pd
 from datetime import datetime
