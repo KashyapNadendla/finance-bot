@@ -130,15 +130,42 @@ def main():
             st.write("No news available.")
     
     # 2) ASSETS TAB
+    # with tab2:
+    #     st.header("Stock Data")
+    #     if st.session_state.get("asset_data"):
+    #         df = pd.DataFrame(st.session_state["asset_data"])
+    #         st.dataframe(df)
+    #         st.write(f"Data last updated: {st.session_state['asset_data_timestamp']}")
+    #     else:
+    #         st.write("No stock data available.")
     with tab2:
         st.header("Stock Data")
         if st.session_state.get("asset_data"):
             df = pd.DataFrame(st.session_state["asset_data"])
             st.dataframe(df)
             st.write(f"Data last updated: {st.session_state['asset_data_timestamp']}")
+        
+        # Asset Graph Feature
+            tickers = df["Ticker"].tolist() if "Ticker" in df.columns else []
+            selected_ticker = st.selectbox("Select an asset to view its price chart:", tickers)
+            tech_mode = st.checkbox("Technical Analysis Mode")
+            if selected_ticker:
+            # Fetch historical data using yfinance
+                import yfinance as yf
+                stock = yf.Ticker(selected_ticker)
+                hist = stock.history(period="1y", interval="1d")
+                if hist.empty:
+                    st.write("No historical data available for this asset.")
+                else:
+                    if tech_mode:
+                    # Simple technical analysis: plot close price and SMA (e.g., 50-day)
+                        hist["SMA50"] = hist["Close"].rolling(window=50).mean()
+                        st.line_chart(hist[["Close", "SMA50"]])
+                    else:
+                        st.line_chart(hist["Close"])
         else:
             st.write("No stock data available.")
-    
+
     # 3) CRYPTO TAB
     with tab3:
         st.header("Crypto Data")
@@ -154,15 +181,40 @@ def main():
         budgeting.budgeting_tool()
     
     # 5) AGENTIC ADVISOR TAB
+    # with tab5:
+    #     st.header("Agentic Advisor")
+    #     user_query = st.text_input("Enter your investment query:")
+    #     if st.button("Get Advice"):
+    #         # Here we pass along extra parameters if needed; agentic_advisor will use them as necessary.
+    #         advice = agentic.agentic_advisor(user_query, tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
+    #                                          alpha_vantage_api_key=ALPHA_VANTAGE_API_KEY)
+    #         st.subheader("Investment Advice:")
+    #         st.write(advice)
+    # In the Agentic Advisor tab, for example:
     with tab5:
         st.header("Agentic Advisor")
         user_query = st.text_input("Enter your investment query:")
+        deep_research = st.checkbox("Deep Research Mode")
+        macro_mode = st.checkbox("Macroeconomics Mode")  # New toggle for macro reports
+
         if st.button("Get Advice"):
-            # Here we pass along extra parameters if needed; agentic_advisor will use them as necessary.
-            advice = agentic.agentic_advisor(user_query, tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
-                                             alpha_vantage_api_key=ALPHA_VANTAGE_API_KEY)
+        # If macro mode is on, generate and display the macro report.
+            if macro_mode:
+                macro_data = analysis.fetch_macro_indicators()
+                macro_report = analysis.generate_macro_report(macro_data)
+                st.subheader("Macroeconomic Report:")
+                st.write(macro_report)
+        
+        # Then, get the investment advice (optionally also adjusted based on deep mode)
+            advice = agentic.agentic_advisor(
+                user_query,
+                deep_mode=deep_research,
+                tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
+                alpha_vantage_api_key=os.getenv("ALPHA_VANTAGE_API_KEY")
+            )
             st.subheader("Investment Advice:")
             st.write(advice)
+
 
 # ---------------------- LAUNCH ---------------------- #
 if __name__ == "__main__":

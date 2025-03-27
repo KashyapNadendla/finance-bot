@@ -139,6 +139,36 @@ def fetch_macro_indicators():
     
     return indicators
 
+def generate_macro_report(macro_data, report_date=None):
+    """
+    Generate a formatted macroeconomic report based on fetched indicators.
+    :param macro_data: Dictionary from fetch_macro_indicators().
+    :param report_date: Optional date string.
+    :return: Formatted report string.
+    """
+    if not report_date:
+        report_date = datetime.now().strftime("%d/%m/%Y")
+    
+    report_lines = [f"**Market Update - {report_date}**\n"]
+    
+    # Example sections – adjust keys as needed based on your API responses:
+    report_lines.append("**Data This Week:**")
+    if "Real GDP" in macro_data:
+        report_lines.append(f"- Real GDP: {macro_data['Real GDP']}")
+    if "CPI" in macro_data:
+        report_lines.append(f"- CPI: {macro_data['CPI']}")
+    if "Treasury Yield" in macro_data:
+        report_lines.append(f"- Treasury Yield: {macro_data['Treasury Yield']}")
+    
+    report_lines.append("\n**The FED's Reaction Function:**")
+    report_lines.append("... [Your commentary here based on macro data] ...")
+    
+    report_lines.append("\n**What We're Watching:**")
+    report_lines.append("... [Additional context] ...")
+    
+    # Join all lines into one formatted string:
+    return "\n".join(report_lines)
+
 
 def generate_ta_chart(ta_df, ticker):
     """
