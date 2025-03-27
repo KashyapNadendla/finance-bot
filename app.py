@@ -181,16 +181,6 @@ def main():
         budgeting.budgeting_tool()
     
     # 5) AGENTIC ADVISOR TAB
-    # with tab5:
-    #     st.header("Agentic Advisor")
-    #     user_query = st.text_input("Enter your investment query:")
-    #     if st.button("Get Advice"):
-    #         # Here we pass along extra parameters if needed; agentic_advisor will use them as necessary.
-    #         advice = agentic.agentic_advisor(user_query, tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
-    #                                          alpha_vantage_api_key=ALPHA_VANTAGE_API_KEY)
-    #         st.subheader("Investment Advice:")
-    #         st.write(advice)
-    # In the Agentic Advisor tab, for example:
     with tab5:
         st.header("Agentic Advisor")
         user_query = st.text_input("Enter your investment query:")
@@ -198,22 +188,23 @@ def main():
         macro_mode = st.checkbox("Macroeconomics Mode")  # New toggle for macro reports
 
         if st.button("Get Advice"):
-        # If macro mode is on, generate and display the macro report.
             if macro_mode:
+            # Fetch macro data (assumed to be cached) and generate a report
                 macro_data = analysis.fetch_macro_indicators()
                 macro_report = analysis.generate_macro_report(macro_data)
                 st.subheader("Macroeconomic Report:")
                 st.write(macro_report)
         
-        # Then, get the investment advice (optionally also adjusted based on deep mode)
+        # Then proceed with agentic advisor as before
             advice = agentic.agentic_advisor(
-                user_query,
+                user_query, 
                 deep_mode=deep_research,
                 tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
                 alpha_vantage_api_key=os.getenv("ALPHA_VANTAGE_API_KEY")
             )
             st.subheader("Investment Advice:")
             st.write(advice)
+
 
 
 # ---------------------- LAUNCH ---------------------- #

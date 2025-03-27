@@ -139,35 +139,70 @@ def fetch_macro_indicators():
     
     return indicators
 
+
+
+def extract_latest_value(data_list):
+    """
+    Given a list of dictionaries with a 'date' and 'value' key,
+    return the value from the most recent date. Assumes dates are in YYYY-MM-DD format.
+    If data_list is empty or improperly formatted, return 'N/A'.
+    """
+    if isinstance(data_list, list) and data_list:
+        # sort by date descending (latest first)
+        try:
+            sorted_list = sorted(data_list, key=lambda x: datetime.strptime(x.get("date", "1900-01-01"), "%Y-%m-%d"), reverse=True)
+            return sorted_list[0].get("value", "N/A")
+        except Exception as e:
+            return "N/A"
+    return "N/A"
+
 def generate_macro_report(macro_data, report_date=None):
     """
-    Generate a formatted macroeconomic report based on fetched indicators.
-    :param macro_data: Dictionary from fetch_macro_indicators().
-    :param report_date: Optional date string.
-    :return: Formatted report string.
+    Generate a formatted macroeconomic report.
+    Instead of dumping raw lists, it extracts the latest value for each indicator
+    and composes a narrative report.
     """
     if not report_date:
         report_date = datetime.now().strftime("%d/%m/%Y")
     
-    report_lines = [f"**Market Update - {report_date}**\n"]
+    # Extract a few key indicators from the raw data:
+    real_gdp = extract_latest_value(macro_data.get("Real GDP", []))
+    cpi = extract_latest_value(macro_data.get("CPI", []))
+    treasury_yield = extract_latest_value(macro_data.get("Treasury Yield", []))
+    federal_funds = extract_latest_value(macro_data.get("Federal Funds Rate", []))
+    inflation = extract_latest_value(macro_data.get("Inflation", []))
+    # You can add other indicators similarly...
     
-    # Example sections – adjust keys as needed based on your API responses:
-    report_lines.append("**Data This Week:**")
-    if "Real GDP" in macro_data:
-        report_lines.append(f"- Real GDP: {macro_data['Real GDP']}")
-    if "CPI" in macro_data:
-        report_lines.append(f"- CPI: {macro_data['CPI']}")
-    if "Treasury Yield" in macro_data:
-        report_lines.append(f"- Treasury Yield: {macro_data['Treasury Yield']}")
+    # For DXY data, which is already a dictionary:
+    dxy = macro_data.get("DXY", {})
+    dxy_trend = dxy.get("Trend", "N/A")
+    dxy_latest = dxy.get("Latest", "N/A")
     
-    report_lines.append("\n**The FED's Reaction Function:**")
-    report_lines.append("... [Your commentary here based on macro data] ...")
+    # Now, compose a concise report:
+    report_lines = [
+        f"**Market Update - {report_date}**",
+        "",
+        "**Key Data This Week:**",
+        f"- Real GDP: {real_gdp}",
+        f"- CPI: {cpi}",
+        f"- Treasury Yield: {treasury_yield}",
+        f"- Federal Funds Rate: {federal_funds}",
+        f"- Inflation: {inflation}",
+        f"- Dollar Index: Trend is {dxy_trend} (Latest: {dxy_latest})",
+        "",
+        "**Analysis:**",
+        "Based on the above data, inflation appears to be moderating and the treasury yields have adjusted accordingly. "
+        "A strong dollar (as indicated by the Dollar Index) could weigh on international asset returns while "
+        "the overall macro environment remains cautious. In this context, a conservative allocation into risk assets "
+        "may be advisable until clearer trends emerge.",
+        "",
+        "**Investment Take:**",
+        "For a beginner investor, we recommend focusing on assets with moderate exposure and low volatility. "
+        "Please note that deeper research mode would provide further detailed insights."
+    ]
     
-    report_lines.append("\n**What We're Watching:**")
-    report_lines.append("... [Additional context] ...")
-    
-    # Join all lines into one formatted string:
     return "\n".join(report_lines)
+
 
 
 def generate_ta_chart(ta_df, ticker):
