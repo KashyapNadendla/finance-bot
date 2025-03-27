@@ -17,6 +17,7 @@ import budgeting
 import crypto
 import analysis
 import agentic
+import forecasting 
 
 # ---------------------- LOAD ENVIRONMENT VARIABLES ---------------------- #
 load_dotenv()
@@ -117,8 +118,9 @@ def main():
                 st.success("Financial data updated.")
     
     # ---------------------- MAIN TABS ---------------------- #
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["News", "Assets", "Crypto", "Budgeting", "Agentic Advisor"])
-    
+    # tab1, tab2, tab3, tab4, tab5 = st.tabs(["News", "Assets", "Crypto", "Budgeting", "Agentic Advisor"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["News", "Assets", "Crypto", "Budgeting", "Agentic Advisor", "Forecasting"])
+
     # 1) NEWS TAB
     with tab1:
         st.header("Latest Finance News")
@@ -206,7 +208,49 @@ def main():
             st.write(advice)
 
 
-
+    with tab6:
+        st.header("Forecasting")
+        # Extract available tickers from your asset data (assuming each asset dict has a "Ticker" key)
+        available_tickers = []
+        if st.session_state.get("asset_data"):
+            available_tickers = [asset["Ticker"] for asset in st.session_state["asset_data"] if "Ticker" in asset]
+        else:
+            st.warning("No asset data available to forecast.")
+    
+        selected_tickers = st.multiselect("Select asset(s) for forecasting (one or two)", options=available_tickers, default=available_tickers[:1])
+        forecast_method = st.radio("Select Forecasting Method", options=["ARIMA", "Prophet"])
+        forecast_days = st.number_input("Forecast Period (days)", min_value=7, max_value=365, value=30, step=7)
+    
+        if st.button("Run Forecast"):
+            if not selected_tickers:
+                st.error("Please select at least one asset for forecasting.")
+            else:
+                forecast_results = {}
+                for ticker in selected_tickers:
+                    if forecast_method == "ARIMA":
+                        hist, forecast_series = forecasting.forecast_arima(ticker, forecast_days=forecast_days)
+                    else:
+                        hist, forecast_series = forecasting.forecast_prophet(ticker, forecast_days=forecast_days)
+                    if hist is None or forecast_series is None:
+                        st.error(f"Forecasting failed for {ticker}.")
+                    else:
+                        fig = forecasting.plot_forecast(hist, forecast_series, title=f"{ticker} Forecast ({forecast_method})")
+                        st.pyplot(fig)
+                        forecast_results[ticker] = {
+                            "historical": hist,
+                            "forecast": forecast_series
+                        }
+                # If two assets are selected, generate a brief comparison summary using your LLM
+                if len(selected_tickers) == 2:
+                    prompt = (
+                        f"Compare the forecasted prices for {selected_tickers[0]} and {selected_tickers[1]} using {forecast_method} over the next {forecast_days} days. "
+                        f"For {selected_tickers[0]}, the forecast is: {forecast_results[selected_tickers[0]]['forecast'].round(2).to_dict()}. "
+                        f"For {selected_tickers[1]}, the forecast is: {forecast_results[selected_tickers[1]]['forecast'].round(2).to_dict()}. "
+                        "Provide a brief comparison on the trends and any potential risks."
+                    )
+                    summary = agentic.call_openai_llm(prompt, system="You are a financial analyst specializing in forecasting comparisons.")
+                    st.subheader("Forecast Comparison Summary:")
+                    st.write(summary)
 # ---------------------- LAUNCH ---------------------- #
 if __name__ == "__main__":
     main()
