@@ -86,15 +86,16 @@ def forecast_arima(ticker, forecast_days=30, order=(5,1,0)):
     forecast_series = pd.Series(forecast_values, index=forecast_index)
     return series, forecast_series
 
-def forecast_prophet(ticker, forecast_days=30):
+def forecast_prophet(ticker, forecast_days=30, asset_type="stock"):
     """
     Forecast the asset's closing price using Prophet.
     Returns the historical series and a forecast series.
     """
-    df = get_asset_history(ticker)
+    # Pass the asset_type to get_asset_history
+    df = get_asset_history(ticker, asset_type=asset_type)
     if df.empty:
         return None, None
-    # Prophet requires a DataFrame with columns: ds (date) and y (value)
+    # Prophet requires columns: ds (date) and y (value)
     df_prophet = df.reset_index()[["index", "Close"]].rename(columns={"index": "ds", "Close": "y"})
     m = Prophet(daily_seasonality=True)
     m.fit(df_prophet)
@@ -103,6 +104,7 @@ def forecast_prophet(ticker, forecast_days=30):
     hist = df_prophet.set_index("ds")["y"]
     forecast_series = forecast.set_index("ds")["yhat"][-forecast_days:]
     return hist, forecast_series
+
 
 def plot_forecast(history, forecast, title="Forecast"):
     """

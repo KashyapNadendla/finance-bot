@@ -14,7 +14,7 @@ import budgeting
 import agentic
 import forecasting
 import crypto
-
+import analysis
 # ---------------------- LOAD ENVIRONMENT VARIABLES ---------------------- #
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
