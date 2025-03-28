@@ -8,7 +8,6 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import requests
-import yfinance as yf
 
 load_dotenv()
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
@@ -41,24 +40,60 @@ def call_openai_llm(prompt, system="", model="gpt-4o", api_key=None):
         st.error(f"OpenAI API error: {e}")
         return "Error fetching recommendations."
 
+
 def get_commodities_data():
     """
-    Fetch live commodities data for Gold, Crude Oil, and Silver.
+    Fetch live commodities data (Gold, Crude Oil, Silver) via Alpha Vantage.
+    Alpha Vantage does not provide a direct commodity price for Crude Oil,
+    so we return "N/A" for that. We pull XAU -> USD and XAG -> USD as 
+    approximate 'Gold' and 'Silver' prices.
     """
-    commodities = {}
-    symbols = {"Gold": "GC=F", "Crude Oil": "CL=F", "Silver": "SI=F"}
-    for name, symbol in symbols.items():
+    api_key = st.session_state.get("ALPHA_VANTAGE_API_KEY", None)
+    if not api_key:
+        st.error("Alpha Vantage API key not found. Please set ALPHA_VANTAGE_API_KEY.")
+        return {
+            "Gold": "N/A",
+            "Crude Oil": "N/A",
+            "Silver": "N/A"
+        }
+
+    base_url = "https://www.alphavantage.co/query"
+    
+    def fetch_spot_price(from_currency, to_currency):
+        """
+        Fetches the real-time currency exchange rate from Alpha Vantage
+        for the given currency pair (e.g., XAU -> USD for Gold).
+        """
         try:
-            ticker = yf.Ticker(symbol)
-            hist = ticker.history(period="1d", interval="1m")
-            if not hist.empty:
-                price = hist['Close'].iloc[-1]
-                commodities[name] = f"${price:.2f}"
-            else:
-                commodities[name] = "N/A"
-        except Exception:
-            commodities[name] = "N/A"
-    return commodities
+            params = {
+                "function": "CURRENCY_EXCHANGE_RATE",
+                "from_currency": from_currency,
+                "to_currency": to_currency,
+                "apikey": api_key
+            }
+            response = requests.get(base_url, params=params)
+            data = response.json()
+            rate_info = data.get("Realtime Currency Exchange Rate", {})
+            # '5. Exchange Rate' is the key for the actual float exchange rate
+            return f"${float(rate_info.get('5. Exchange Rate', '0.0')):,.2f}"
+        except Exception as e:
+            st.error(f"Error fetching {from_currency}->{to_currency} price: {e}")
+            return "N/A"
+
+    # Gold is typically XAU (troy ounce) to USD
+    gold_price = fetch_spot_price("XAU", "USD")
+
+    # Silver is XAG to USD
+    silver_price = fetch_spot_price("XAG", "USD")
+
+    # Crude Oil not provided by Alpha Vantage, so fallback to "N/A" or use another data source
+    crude_oil_price = "N/A"
+
+    return {
+        "Gold": gold_price,
+        "Crude Oil": crude_oil_price,
+        "Silver": silver_price
+    }
 
 def get_macro_conditions():
     """
@@ -148,7 +183,7 @@ def agentic_advisor(user_input, deep_mode=False, **kwargs):
         suggestion_prompt,
         system="You are a financial advisor specializing in asset recommendations."
     )
-    st.write("Initial asset recommendations:", recommendations)
+    # st.write("Initial asset recommendations:", recommendations)
     
     # Step 4: Evaluate recommendations against macro and technical conditions
     tech_analysis = analysis.get_technical_analysis_summaries(asset_data)
@@ -215,7 +250,7 @@ def agentic_advisor(user_input, deep_mode=False, **kwargs):
         )
         iterations += 1
 
-    st.write("Final validated recommendations:", validated_recommendations)
+    # st.write("Final validated recommendations:", validated_recommendations)
     return validated_recommendations
 
 def agentic_chat_interface():
