@@ -8,6 +8,7 @@ from openai import OpenAI
 import os
 from dotenv import load_dotenv
 import requests
+import websearch
 
 load_dotenv()
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
@@ -127,28 +128,166 @@ def get_macro_conditions():
     )
     return conditions_str
 
+# def agentic_advisor(user_input, deep_mode=False, **kwargs):
+#     """
+#     Multi-agent advisor chain:
+#       1. Parse user input.
+#       2. Gather market data.
+#       3. Generate recommendations.
+      
+#     If deep_mode is True, the prompt instructs the LLM to provide a detailed report;
+#     otherwise, a concise asset suggestion.
+#     """
+#     # Step 1: Parse user input
+#     base_prompt = f"Analyze the following user input for investment advice, risk appetite, and expected returns: '{user_input}'."
+    
+#     if deep_mode:
+#         # Deep research mode prompt
+#         prompt = base_prompt + " Provide a detailed analysis including macroeconomic context, technical indicators, and suggested investment amounts for each recommended asset."
+#     else:
+#         # Concise mode
+#         prompt = base_prompt + " Provide a short, actionable recommendation on which assets to invest in and approximate allocations, suited for a beginner investor."
+    
+#     user_intent = call_openai_llm(prompt, system="You are a financial advisor specializing in market analysis.")
+    
+#     st.write("Parsed user intent:", user_intent)
+    
+#     # Step 2: Gather market data
+#     live_news = news.fetch_finance_news()
+#     asset_data = st.session_state.get('asset_data', [])
+#     stock_suggestions = stocks.format_asset_suggestions(asset_data) if hasattr(stocks, "format_asset_suggestions") else str(asset_data)
+#     crypto_data = crypto.get_top_movers()
+#     commodities_data = get_commodities_data()
+#     macro_data = get_macro_conditions()
+#     live_data_str = (
+#         f"News: {live_news}\n"
+#         f"Stocks: {stock_suggestions}\n"
+#         f"Cryptocurrencies: {crypto_data}\n"
+#         f"Commodities: {commodities_data}\n"
+#         f"Macro Indicators: {macro_data}\n"
+#         f"Google Trends: N/A"
+#     )
+    
+#     # Step 3: Generate initial recommendations
+#     suggestion_prompt = f"""
+#     Based on the following user analysis and live market data, suggest a few assets for investment.
+    
+#     User Analysis:
+#     {user_intent}
+    
+#     Live Market Data:
+#     {live_data_str}
+    
+#     Consider the user's risk appetite and expected returns. Provide asset names, expected percentage gains, and risk levels.
+#     """
+#     recommendations = call_openai_llm(
+#         suggestion_prompt,
+#         system="You are a financial advisor specializing in asset recommendations."
+#     )
+#     # st.write("Initial asset recommendations:", recommendations)
+    
+#     # Step 4: Evaluate recommendations against macro and technical conditions
+#     tech_analysis = analysis.get_technical_analysis_summaries(asset_data)
+#     evaluation_prompt = f"""
+#     Evaluate the following asset suggestions against current macroeconomic conditions and technical analysis:
+    
+#     Asset Suggestions:
+#     {recommendations}
+    
+#     Macroeconomic Conditions:
+#     {macro_data}
+    
+#     Technical Analysis:
+#     {tech_analysis}
+    
+#     If conditions are favorable, confirm the recommendations; otherwise, adjust them to be more conservative.
+#     """
+#     validated_recommendations = call_openai_llm(
+#         evaluation_prompt,
+#         system="You are a senior financial strategist specializing in risk management."
+#     )
+    
+#     iterations = 0
+#     # We'll refine recommendations only if "conservative" is present.
+#     while iterations < 3:
+#         if "conservative" not in validated_recommendations.lower():
+#             break
+#         re_adjust_prompt = f"""
+#         The current market conditions indicate a need for more conservative asset recommendations.
+#         Adjust the previous suggestions accordingly.
+        
+#         Previous Suggestions:
+#         {recommendations}
+        
+#         Macroeconomic Conditions:
+#         {macro_data}
+        
+#         Technical Analysis:
+#         {tech_analysis}
+#         """
+#         new_recommendations = call_openai_llm(
+#             re_adjust_prompt,
+#             system="You are a financial advisor specializing in asset recommendations."
+#         )
+#         # If the new recommendations don't change, exit the loop.
+#         if new_recommendations.strip() == recommendations.strip():
+#             break
+#         recommendations = new_recommendations
+#         evaluation_prompt = f"""
+#         Evaluate the following adjusted asset suggestions:
+        
+#         Adjusted Suggestions:
+#         {recommendations}
+        
+#         Macroeconomic Conditions:
+#         {macro_data}
+        
+#         Technical Analysis:
+#         {tech_analysis}
+#         """
+#         validated_recommendations = call_openai_llm(
+#             evaluation_prompt,
+#             system="You are a senior financial strategist specializing in risk management."
+#         )
+#         iterations += 1
+
+#     # st.write("Final validated recommendations:", validated_recommendations)
+#     return validated_recommendations
+
+# def agentic_chat_interface():
+#     st.header("Agentic Advisor Chat")
+#     user_input = st.text_input("Enter your investment query:")
+    
+#     if st.button("Submit Agentic Query"):
+#         if user_input:
+#             with st.spinner("Processing your query through multiple agents..."):
+#                 response = agentic_advisor(
+#                     user_input, 
+#                     tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
+#                     alpha_vantage_api_key=ALPHA_VANTAGE_API_KEY
+#                 )
+#             st.session_state.setdefault('agentic_history', []).append({"user": user_input, "advisor": response})
+    
+#     for entry in st.session_state.get('agentic_history', []):
+#         st.markdown(f"**You:** {entry['user']}")
+#         st.markdown(f"**Agentic Advisor:** {entry['advisor']}")
 def agentic_advisor(user_input, deep_mode=False, **kwargs):
     """
     Multi-agent advisor chain:
       1. Parse user input.
       2. Gather market data.
       3. Generate recommendations.
-      
-    If deep_mode is True, the prompt instructs the LLM to provide a detailed report;
-    otherwise, a concise asset suggestion.
+      4. Evaluate and refine using macro + technical data.
+      5. Use web search if response lacks data or context.
     """
     # Step 1: Parse user input
     base_prompt = f"Analyze the following user input for investment advice, risk appetite, and expected returns: '{user_input}'."
-    
     if deep_mode:
-        # Deep research mode prompt
         prompt = base_prompt + " Provide a detailed analysis including macroeconomic context, technical indicators, and suggested investment amounts for each recommended asset."
     else:
-        # Concise mode
         prompt = base_prompt + " Provide a short, actionable recommendation on which assets to invest in and approximate allocations, suited for a beginner investor."
     
     user_intent = call_openai_llm(prompt, system="You are a financial advisor specializing in market analysis.")
-    
     st.write("Parsed user intent:", user_intent)
     
     # Step 2: Gather market data
@@ -158,6 +297,7 @@ def agentic_advisor(user_input, deep_mode=False, **kwargs):
     crypto_data = crypto.get_top_movers()
     commodities_data = get_commodities_data()
     macro_data = get_macro_conditions()
+
     live_data_str = (
         f"News: {live_news}\n"
         f"Stocks: {stock_suggestions}\n"
@@ -166,107 +306,97 @@ def agentic_advisor(user_input, deep_mode=False, **kwargs):
         f"Macro Indicators: {macro_data}\n"
         f"Google Trends: N/A"
     )
-    
+
     # Step 3: Generate initial recommendations
     suggestion_prompt = f"""
     Based on the following user analysis and live market data, suggest a few assets for investment.
-    
+
     User Analysis:
     {user_intent}
-    
+
     Live Market Data:
     {live_data_str}
-    
+
     Consider the user's risk appetite and expected returns. Provide asset names, expected percentage gains, and risk levels.
     """
     recommendations = call_openai_llm(
         suggestion_prompt,
         system="You are a financial advisor specializing in asset recommendations."
     )
-    # st.write("Initial asset recommendations:", recommendations)
-    
-    # Step 4: Evaluate recommendations against macro and technical conditions
+
+    # Step 4: Fallback to web search if the model says it lacks data
+    if "insufficient data" in recommendations.lower() or not recommendations.strip():
+        st.warning("LLM response insufficient — fetching additional context via web search.")
+        search_context = websearch.run_web_search(user_input)
+        fallback_prompt = suggestion_prompt + "\nAdditional Web Search Context:\n" + str(search_context)
+        recommendations = call_openai_llm(
+            fallback_prompt,
+            system="You are a financial advisor specializing in asset recommendations."
+        )
+
+    # Step 5: Evaluate recommendations using macro and technical data
     tech_analysis = analysis.get_technical_analysis_summaries(asset_data)
     evaluation_prompt = f"""
     Evaluate the following asset suggestions against current macroeconomic conditions and technical analysis:
-    
+
     Asset Suggestions:
     {recommendations}
-    
+
     Macroeconomic Conditions:
     {macro_data}
-    
+
     Technical Analysis:
     {tech_analysis}
-    
-    If conditions are favorable, confirm the recommendations; otherwise, adjust them to be more conservative.
+
+    If conditions are unfavorable, adjust recommendations to be more conservative.
     """
     validated_recommendations = call_openai_llm(
         evaluation_prompt,
         system="You are a senior financial strategist specializing in risk management."
     )
-    
+
+    # Optional iterative refinement
     iterations = 0
-    # We'll refine recommendations only if "conservative" is present.
     while iterations < 3:
         if "conservative" not in validated_recommendations.lower():
             break
         re_adjust_prompt = f"""
-        The current market conditions indicate a need for more conservative asset recommendations.
-        Adjust the previous suggestions accordingly.
-        
+        Adjust the previous recommendations to be more conservative based on market conditions.
+
         Previous Suggestions:
         {recommendations}
-        
+
         Macroeconomic Conditions:
         {macro_data}
-        
+
         Technical Analysis:
         {tech_analysis}
         """
         new_recommendations = call_openai_llm(
             re_adjust_prompt,
-            system="You are a financial advisor specializing in asset recommendations."
+            system="You are a financial advisor specializing in cautious investing strategies."
         )
-        # If the new recommendations don't change, exit the loop.
+
         if new_recommendations.strip() == recommendations.strip():
             break
         recommendations = new_recommendations
-        evaluation_prompt = f"""
-        Evaluate the following adjusted asset suggestions:
-        
-        Adjusted Suggestions:
-        {recommendations}
-        
-        Macroeconomic Conditions:
-        {macro_data}
-        
-        Technical Analysis:
-        {tech_analysis}
-        """
+
         validated_recommendations = call_openai_llm(
-            evaluation_prompt,
-            system="You are a senior financial strategist specializing in risk management."
+            f"""
+            Re-evaluate these adjusted recommendations:
+
+            Adjusted Suggestions:
+            {recommendations}
+
+            Macro Indicators:
+            {macro_data}
+
+            Technical Indicators:
+            {tech_analysis}
+            """,
+            system="You are a senior strategist reviewing adjusted investment plans."
         )
+
         iterations += 1
 
-    # st.write("Final validated recommendations:", validated_recommendations)
     return validated_recommendations
-
-def agentic_chat_interface():
-    st.header("Agentic Advisor Chat")
-    user_input = st.text_input("Enter your investment query:")
-    
-    if st.button("Submit Agentic Query"):
-        if user_input:
-            with st.spinner("Processing your query through multiple agents..."):
-                response = agentic_advisor(
-                    user_input, 
-                    tickers=["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
-                    alpha_vantage_api_key=ALPHA_VANTAGE_API_KEY
-                )
-            st.session_state.setdefault('agentic_history', []).append({"user": user_input, "advisor": response})
-    
-    for entry in st.session_state.get('agentic_history', []):
-        st.markdown(f"**You:** {entry['user']}")
-        st.markdown(f"**Agentic Advisor:** {entry['advisor']}")
