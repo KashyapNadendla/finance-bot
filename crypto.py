@@ -7,7 +7,7 @@ load_dotenv()
 CMC_API_KEY = os.getenv("CMC_API_KEY")
 BASE_URL = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest"
 
-def get_coinmarketcap_crypto_data(limit=50):
+def get_coinmarketcap_crypto_data(limit=100):
     """
     Fetch cryptocurrency data from CoinMarketCap.
     """
@@ -42,16 +42,16 @@ def get_coinmarketcap_crypto_data(limit=50):
 
 def get_top_movers():
     """
-    Return the top 10 movers sorted by absolute 24h change percentage.
+    Return the top 100 movers sorted by absolute 24h change percentage.
     """
-    crypto_data = get_coinmarketcap_crypto_data(limit=50)
+    crypto_data = get_coinmarketcap_crypto_data(limit=100)
     if not crypto_data:
         st.error("No cryptocurrency data retrieved.")
         return []
     
     # Sort by absolute 24h percentage change
     crypto_data = sorted(crypto_data, key=lambda x: abs(x["24h Change (%)"] or 0), reverse=True)
-    top_movers = crypto_data[:10]
+    top_movers = crypto_data[:100]
     
     # Format the numbers
     for item in top_movers:
@@ -66,7 +66,7 @@ def get_crypto_prices():
     Fetch the current price for a subset of cryptocurrencies (e.g., BTC and ETH)
     from CoinMarketCap.
     """
-    crypto_data = get_coinmarketcap_crypto_data(limit=50)
+    crypto_data = get_coinmarketcap_crypto_data(limit=100)
     prices = {}
     for symbol in ["BTC", "ETH"]:
         for crypto in crypto_data:
