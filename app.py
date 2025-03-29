@@ -15,6 +15,7 @@ import agentic
 import forecasting
 import crypto
 import analysis
+import portfolio
 # ---------------------- LOAD ENVIRONMENT VARIABLES ---------------------- #
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
@@ -80,8 +81,15 @@ def main():
                 st.success("Stock prices updated.")
 
     # ---------------------- MAIN TABS ---------------------- #
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Introduction", "Assets", "Budgeting", "Agentic Advisor", "Forecasting and News"])
-
+    # tab1, tab2, tab3, tab4, tab5 = st.tabs(["Introduction", "Assets", "Budgeting", "Agentic Advisor", "Forecasting and News"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "Introduction", 
+    "Portfolio", 
+    "Assets", 
+    "Budgeting", 
+    "Agentic Advisor", 
+    "Forecasting and News"
+]   )
     # 1) INTRODUCTION TAB (renamed from News)
     with tab1:
         st.header("Introduction & Instructions")
@@ -97,8 +105,12 @@ def main():
         - **Ask for Investment Advice**: Enter your query in the Agentic Advisor tab to get personalized investment advice.
         - **Forecasting**: Use the forecasting tool to predict stock prices for the next days based on historical data.
         """)
-    # 2) ASSETS TAB
+    # 2) PORTFOLIO TAB
     with tab2:
+        portfolio.portfolio_manager()
+
+    # 3) ASSETS TAB
+    with tab3:
         st.header("Stock & Crypto Data")
     
         # Fetch stock data
@@ -138,16 +150,23 @@ def main():
 
 
 
-    # 3) BUDGETING TAB
-    with tab3:
+    # 4) BUDGETING TAB
+    with tab4:
         budgeting.budgeting_tool()
 
-    # 4) AGENTIC ADVISOR TAB
-    with tab4:
+    # 5) AGENTIC ADVISOR TAB
+    with tab5:
         st.header("Agentic Advisor")
         user_query = st.text_input("Enter your investment query:")
         deep_research = st.checkbox("Deep Research Mode")
         macro_mode = st.checkbox("Macroeconomics Mode")
+        # Gather portfolio details (if any) from session state.
+        portfolio_info = ""
+        if "portfolio" in st.session_state and st.session_state["portfolio"]:
+            portfolio_info = ", ".join([
+                f"{asset['Quantity']} of {asset['Asset']} at ${asset['Purchase Price']}"
+                for asset in st.session_state["portfolio"]
+            ])
 
         if st.button("Get Advice"):
             if macro_mode:
@@ -166,8 +185,8 @@ def main():
             st.write(advice)
 
     
-        # 5) FORECASTING AND NEWS TAB
-    with tab5:
+    # 6) FORECASTING AND NEWS TAB
+    with tab6:
         st.header("Forecasting and News")
     
         # Display News
@@ -224,12 +243,25 @@ def main():
                 if len(selected) == 2 and generate_ai_comp:
                     t1, a1 = selected[0].split("|")
                     t2, a2 = selected[1].split("|")
+                    # prompt = (
+                    #     f"Compare the forecasted prices for {t1} ({a1}) and {t2} ({a2}) using {forecast_method} over the next {forecast_days} days. "
+                    #     f"For {t1}, the forecast is: {forecast_results[t1]['forecast'].round(2).to_dict()}. "
+                    #     f"For {t2}, the forecast is: {forecast_results[t2]['forecast'].round(2).to_dict()}. "
+                    #     "Provide a brief comparison on the trends and any potential risks."
+                    # )
+                    t1_forecast = forecast_results[t1]['forecast']
+                    t2_forecast = forecast_results[t2]['forecast']
+                    t1_display = t1_forecast.round(2).to_dict() if t1_forecast is not None else "No forecast data available"
+                    t2_display = t2_forecast.round(2).to_dict() if t2_forecast is not None else "No forecast data available"
+
                     prompt = (
                         f"Compare the forecasted prices for {t1} ({a1}) and {t2} ({a2}) using {forecast_method} over the next {forecast_days} days. "
-                        f"For {t1}, the forecast is: {forecast_results[t1]['forecast'].round(2).to_dict()}. "
-                        f"For {t2}, the forecast is: {forecast_results[t2]['forecast'].round(2).to_dict()}. "
+                        f"For {t1}, the forecast is: {t1_display}. "
+                        f"For {t2}, the forecast is: {t2_display}. "
                         "Provide a brief comparison on the trends and any potential risks."
                     )
+
+
                     summary = agentic.call_openai_llm(prompt, system="You are a financial analyst specializing in forecasting comparisons.")
                     st.subheader("Forecast Comparison Summary:")
                     st.write(summary)
