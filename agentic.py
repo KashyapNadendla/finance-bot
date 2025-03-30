@@ -137,8 +137,25 @@ def agentic_advisor(user_input, deep_mode=False, **kwargs):
       4. Evaluate and refine using macro + technical data.
       5. Use web search if response lacks data or context.
     """
+
+    # Gather portfolio details if available
+    portfolio_info = ""
+    if "portfolio" in st.session_state and st.session_state["portfolio"]:
+        portfolio_info = "\nPortfolio Holdings:\n" + "\n".join([
+            f"- {asset['Quantity']} of {asset['Asset']} at ${asset['Purchase Price']}" 
+            for asset in st.session_state["portfolio"]
+        ])
+
+    # Build the base prompt including portfolio details if available
+    base_prompt = f"User Query: {user_input}\n"
+    if portfolio_info:
+        base_prompt += portfolio_info + "\n"
+
+    base_prompt += "Analyze the above details or the user input for investment advice, risk appetite and expected returns and provide personalized investment recommendations: '{user_input}."
+
+
     # Step 1: Parse user input
-    base_prompt = f"Analyze the following user input for investment advice, risk appetite, and expected returns: '{user_input}'."
+    # base_prompt = f"Analyze the following user input for investment advice, risk appetite, and expected returns: '{user_input}'."
     if deep_mode:
         prompt = base_prompt + " Provide a detailed analysis including macroeconomic context, technical indicators, and suggested investment amounts for each recommended asset."
     else:
