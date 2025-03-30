@@ -15,35 +15,60 @@ class TechnicalAnalysis:
         if not self.api_key:
             raise ValueError("Alpha Vantage API key not found in environment variables")
 
-    def fetch_daily_data(self, outputsize="compact"):
+    def fetch_daily_data(self, outputsize="compact", asset_type="stock"):
         """
         Fetch daily historical price data from Alpha Vantage.
+        If asset_type is 'crypto', use DIGITAL_CURRENCY_DAILY and adjust column names.
         """
         try:
-            params = {
-                "function": "TIME_SERIES_DAILY",
-                "symbol": self.symbol,
-                "outputsize": outputsize,  # compact or full
-                "apikey": self.api_key
-            }
+            if asset_type.lower() == "crypto":
+                params = {
+                    "function": "DIGITAL_CURRENCY_DAILY",
+                    "symbol": self.symbol,
+                    "market": "USD",
+                    "apikey": self.api_key
+                }
+            else:
+                params = {
+                    "function": "TIME_SERIES_DAILY",
+                    "symbol": self.symbol,
+                    "outputsize": outputsize,  # compact or full
+                    "apikey": self.api_key
+                }
             response = requests.get(self.api_url, params=params)
             if response.status_code != 200:
                 print(f"Error fetching data: {response.status_code} - {response.text}")
                 return pd.DataFrame()
             data = response.json()
-            if "Error Message" in data:
-                print(f"API Error: {data['Error Message']}")
-                return pd.DataFrame()
-            time_series = data.get("Time Series (Daily)", {})
-            if not time_series:
-                print("No time series data returned")
-                return pd.DataFrame()
-            df = pd.DataFrame.from_dict(time_series, orient='index')
-            df.index = pd.to_datetime(df.index)
-            df = df.sort_index()
-            df.columns = ['open', 'high', 'low', 'close', 'volume']
-            for col in df.columns:
-                df[col] = pd.to_numeric(df[col])
+            if asset_type.lower() == "crypto":
+                time_series = data.get("Time Series (Digital Currency Daily)", {})
+                if not time_series:
+                    print("No crypto time series data returned")
+                    return pd.DataFrame()
+                df = pd.DataFrame.from_dict(time_series, orient='index')
+                df.index = pd.to_datetime(df.index)
+                df = df.sort_index()
+                # Rename the crypto-specific columns to standard names
+                df = df.rename(columns={
+                    "1a. open (USD)": "open",
+                    "2a. high (USD)": "high",
+                    "3a. low (USD)": "low",
+                    "4a. close (USD)": "close",
+                # Optionally include volume if needed
+                })
+            else:
+                time_series = data.get("Time Series (Daily)", {})
+                if not time_series:
+                    print("No time series data returned")
+                    return pd.DataFrame()
+                df = pd.DataFrame.from_dict(time_series, orient='index')
+                df.index = pd.to_datetime(df.index)
+                df = df.sort_index()
+                df.columns = ['open', 'high', 'low', 'close', 'volume']
+            # Ensure numeric conversion
+            for col in ["open", "high", "low", "close"]:
+                if col in df.columns:
+                   df[col] = pd.to_numeric(df[col], errors='coerce')
             return df
         except Exception as e:
             print(f"Exception when fetching daily data for {self.symbol}: {e}")
