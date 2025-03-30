@@ -82,9 +82,10 @@ def main():
 
     # ---------------------- MAIN TABS ---------------------- #
     # tab1, tab2, tab3, tab4, tab5 = st.tabs(["Introduction", "Assets", "Budgeting", "Agentic Advisor", "Forecasting and News"])
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Introduction", 
-    "Portfolio and Assets", 
+    "Portfolio", 
+    "Assets", 
     "Budgeting", 
     "Agentic Advisor", 
     "Forecasting and News"
@@ -104,151 +105,57 @@ def main():
         - **Ask for Investment Advice**: Enter your query in the Agentic Advisor tab to get personalized investment advice.
         - **Forecasting**: Use the forecasting tool to predict stock prices for the next days based on historical data.
         """)
-
-    # 2) ASSETS TAB
-    # with tab2:
-    #     st.header("Portfolio and Asset Data")
-    #     portfolio.portfolio_manager()
-    #     # Fetch stock data
-    #     if st.session_state.get("asset_data"):
-    #         df = pd.DataFrame(st.session_state["asset_data"])
-    #         st.dataframe(df)
-    #         st.write(f"Data last updated: {st.session_state['asset_data_timestamp']}")
-    
-    #         # Asset Graph Feature
-    #         tickers = df["Ticker"].tolist() if "Ticker" in df.columns else []
-    #         selected_ticker = st.selectbox("Select an asset to view its price chart:", tickers)
-    #         asset_type = st.radio("Select Asset Type:", options=["Stock", "Crypto"], index=0)
-    #         tech_mode = st.checkbox("Technical Analysis Mode")
-    
-    #         if selected_ticker:
-    #             # Use forecasting.get_asset_history to fetch data from Alpha Vantage
-    #             hist = forecasting.get_asset_history(selected_ticker, asset_type=asset_type.lower(), period="1y")
-    #             if hist.empty:
-    #                 st.write("No historical data available for this asset.")
-    #             else:
-    #                 if tech_mode:
-    #                     hist["SMA50"] = hist["Close"].rolling(window=50).mean()
-    #                     st.line_chart(hist[["Close", "SMA50"]])
-    #                 else:
-    #                     st.line_chart(hist["Close"])
-    #     else:
-    #         st.write("No stock data available.")
-    
-    #     # Display crypto data below stocks if available (optional)
-    #     st.subheader("Cryptocurrency Data")
-    #     crypto_data = crypto.fetch_crypto_data()
-    #     if crypto_data:
-    #         df_crypto = pd.DataFrame(crypto_data)
-    #         st.dataframe(df_crypto)
-    #     else:
-    #         st.write("No crypto data available.")
-
+    # 2) PORTFOLIO TAB
     with tab2:
-        st.header("Portfolio and Asset Data")
         portfolio.portfolio_manager()
+
+    # 3) ASSETS TAB
+    with tab3:
+        st.header("Stock & Crypto Data")
+    
         # Fetch stock data
         if st.session_state.get("asset_data"):
             df = pd.DataFrame(st.session_state["asset_data"])
             st.dataframe(df)
             st.write(f"Data last updated: {st.session_state['asset_data_timestamp']}")
-
-            # Display crypto data below stocks if available (optional)
-            st.subheader("Cryptocurrency Data")
-            crypto_data = crypto.fetch_crypto_data()
-            if crypto_data:
-                df_crypto = pd.DataFrame(crypto_data)
-                st.dataframe(df_crypto)
-            else:
-                st.write("No crypto data available.")
-        
-            # NEW SECTION: Asset Price & Technical Analysis
-            st.header("Asset Price & Technical Analysis")
-            # Let user choose asset type
+    
+            # Asset Graph Feature
+            tickers = df["Ticker"].tolist() if "Ticker" in df.columns else []
+            selected_ticker = st.selectbox("Select an asset to view its price chart:", tickers)
             asset_type = st.radio("Select Asset Type:", options=["Stock", "Crypto"], index=0)
-            # Build tickers list based on asset type
-            if asset_type.lower() == "stock":
-                tickers = df["Ticker"].tolist() if "Ticker" in df.columns else []
-            else:
-                crypto_data = crypto.fetch_crypto_data()
-                if crypto_data:
-                    crypto_df = pd.DataFrame(crypto_data)
-                    tickers = crypto_df["Symbol"].tolist() if "Symbol" in crypto_df.columns else []
-                else:
-                    tickers = []
-            selected_ticker = st.selectbox("Select an asset for analysis:", tickers)
-            tech_mode = st.checkbox("Enable Technical Analysis Mode")
+            tech_mode = st.checkbox("Technical Analysis Mode")
+    
             if selected_ticker:
-                # If technical analysis mode is off, just show a price chart.
-                if not tech_mode:
-                    hist = forecasting.get_asset_history(selected_ticker, asset_type=asset_type.lower(), period="1y")
-                    if hist.empty:
-                        st.write("No historical data available.")
+                # Use forecasting.get_asset_history to fetch data from Alpha Vantage
+                hist = forecasting.get_asset_history(selected_ticker, asset_type=asset_type.lower(), period="1y")
+                if hist.empty:
+                    st.write("No historical data available for this asset.")
+                else:
+                    if tech_mode:
+                        hist["SMA50"] = hist["Close"].rolling(window=50).mean()
+                        st.line_chart(hist[["Close", "SMA50"]])
                     else:
                         st.line_chart(hist["Close"])
-                else:
-                    st.subheader("Technical Analysis")
-                    # TASK 2: Let user choose TA indicators.
-                    indicators_selected = st.multiselect(
-                        "Select Technical Indicators to display:",
-                        options=["SMA", "EMA", "RSI", "Bollinger Bands", "Stochastic RSI"],
-                        default=["SMA"]
-                    )
-                    # Use TA.py's TechnicalAnalysis class.
-                    from TA import TechnicalAnalysis
-                    ta_obj = TechnicalAnalysis(symbol=selected_ticker)
-                    ta_df = ta_obj.fetch_daily_data(asset_type=asset_type.lower())
-                    # if ta_df.empty:
-                    #     st.write("No historical data available for technical analysis.")
-                    # In the app.py file, modify this part:
-                    if ta_df.empty:
-                        st.write("No historical data available for technical analysis.")
-                        st.write(f"Debug: Unable to fetch historical data for {selected_ticker} as {asset_type}")
-                    else:
-                        ta_df = ta_obj.compute_local_ta(ta_df)
-                    
-                        # Build a combined chart for price and overlays.
-                        chart_data = pd.DataFrame({"Close": ta_df["close"]})
-                        if "SMA" in indicators_selected:
-                            chart_data["SMA50"] = ta_df["sma_50"]
-                        if "EMA" in indicators_selected:
-                            chart_data["EMA12"] = ta_df["ema_12"]
-                        if "Bollinger Bands" in indicators_selected:
-                            chart_data["BB Upper"] = ta_df["BBU_20_2.0"]
-                            chart_data["BB Lower"] = ta_df["BBL_20_2.0"]
-                        st.line_chart(chart_data)
-                        # Display RSI and Stochastic RSI in separate charts if selected.
-                        if "RSI" in indicators_selected:
-                            st.subheader("RSI")
-                            st.line_chart(ta_df["rsi"])
-                        if "Stochastic RSI" in indicators_selected:
-                            st.subheader("Stochastic RSI")
-                            st.line_chart(ta_df[["STOCHk_14_3_3", "STOCHd_14_3_3"]])
-                    
-                        # TASK 3: Provide a simplified explanation using LLM.
-                        if st.button("Simplify Technical Analysis"):
-                            # Get aggregated TA summary.
-                            ta_summary = ta_obj.aggregate_ta(ta_df)
-                            prompt = f"""
-                            Here is a technical analysis summary for {selected_ticker}:
-                            {ta_summary}
-                            Explain in simple, beginner-friendly terms what this technical analysis means for an investor.
-                            """
-                            simplified = agentic.call_openai_llm(
-                                prompt, 
-                                system="You are a financial advisor who explains technical analysis in simple terms."
-                            )
-                            st.subheader("Simplified Technical Analysis")
-                            st.write(simplified)
         else:
             st.write("No stock data available.")
+    
+        # Display crypto data below stocks if available (optional)
+        st.subheader("Cryptocurrency Data")
+        crypto_data = crypto.fetch_crypto_data()
+        if crypto_data:
+            df_crypto = pd.DataFrame(crypto_data)
+            st.dataframe(df_crypto)
+        else:
+            st.write("No crypto data available.")
 
-    # 3) BUDGETING TAB
-    with tab3:
+
+
+    # 4) BUDGETING TAB
+    with tab4:
         budgeting.budgeting_tool()
 
-    # 4) AGENTIC ADVISOR TAB
-    with tab4:
+    # 5) AGENTIC ADVISOR TAB
+    with tab5:
         st.header("Agentic Advisor")
         user_query = st.text_input("Enter your investment query:")
         deep_research = st.checkbox("Deep Research Mode")
@@ -278,8 +185,8 @@ def main():
             st.write(advice)
 
     
-    # 5) FORECASTING AND NEWS TAB
-    with tab5:
+    # 6) FORECASTING AND NEWS TAB
+    with tab6:
         st.header("Forecasting and News")
     
         # Display News
@@ -336,6 +243,12 @@ def main():
                 if len(selected) == 2 and generate_ai_comp:
                     t1, a1 = selected[0].split("|")
                     t2, a2 = selected[1].split("|")
+                    # prompt = (
+                    #     f"Compare the forecasted prices for {t1} ({a1}) and {t2} ({a2}) using {forecast_method} over the next {forecast_days} days. "
+                    #     f"For {t1}, the forecast is: {forecast_results[t1]['forecast'].round(2).to_dict()}. "
+                    #     f"For {t2}, the forecast is: {forecast_results[t2]['forecast'].round(2).to_dict()}. "
+                    #     "Provide a brief comparison on the trends and any potential risks."
+                    # )
                     t1_forecast = forecast_results[t1]['forecast']
                     t2_forecast = forecast_results[t2]['forecast']
                     t1_display = t1_forecast.round(2).to_dict() if t1_forecast is not None else "No forecast data available"

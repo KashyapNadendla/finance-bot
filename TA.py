@@ -15,66 +15,6 @@ class TechnicalAnalysis:
         if not self.api_key:
             raise ValueError("Alpha Vantage API key not found in environment variables")
 
-    # def fetch_daily_data(self, outputsize="compact", asset_type="stock"):
-    #     """
-    #     Fetch daily historical price data from Alpha Vantage.
-    #     If asset_type is 'crypto', use DIGITAL_CURRENCY_DAILY and adjust column names.
-    #     """
-    #     try:
-    #         if asset_type.lower() == "crypto":
-    #             params = {
-    #                 "function": "DIGITAL_CURRENCY_DAILY",
-    #                 "symbol": self.symbol,
-    #                 "market": "USD",
-    #                 "apikey": self.api_key
-    #             }
-    #         else:
-    #             params = {
-    #                 "function": "TIME_SERIES_DAILY",
-    #                 "symbol": self.symbol,
-    #                 "outputsize": outputsize,  # compact or full
-    #                 "apikey": self.api_key
-    #             }
-    #         response = requests.get(self.api_url, params=params)
-    #         if response.status_code != 200:
-    #             print(f"Error fetching data: {response.status_code} - {response.text}")
-    #             return pd.DataFrame()
-    #         data = response.json()
-    #         if asset_type.lower() == "crypto":
-    #             time_series = data.get("Time Series (Digital Currency Daily)", {})
-    #             if not time_series:
-    #                 print("No crypto time series data returned")
-    #                 return pd.DataFrame()
-    #             df = pd.DataFrame.from_dict(time_series, orient='index')
-    #             df.index = pd.to_datetime(df.index)
-    #             df = df.sort_index()
-    #             # Rename the crypto-specific columns to standard names
-    #             df = df.rename(columns={
-    #                 "1a. open (USD)": "open",
-    #                 "2a. high (USD)": "high",
-    #                 "3a. low (USD)": "low",
-    #                 "4a. close (USD)": "close",
-    #             # Optionally include volume if needed
-    #             })
-    #         else:
-    #             time_series = data.get("Time Series (Daily)", {})
-    #             if not time_series:
-    #                 print("No time series data returned")
-    #                 return pd.DataFrame()
-    #             df = pd.DataFrame.from_dict(time_series, orient='index')
-    #             df.index = pd.to_datetime(df.index)
-    #             df = df.sort_index()
-    #             df.columns = ['open', 'high', 'low', 'close', 'volume']
-    #         # Ensure numeric conversion
-    #         for col in ["open", "high", "low", "close"]:
-    #             if col in df.columns:
-    #                df[col] = pd.to_numeric(df[col], errors='coerce')
-    #         return df
-    #     except Exception as e:
-    #         print(f"Exception when fetching daily data for {self.symbol}: {e}")
-    #         return pd.DataFrame()
-
-
     def fetch_daily_data(self, outputsize="compact", asset_type="stock"):
         """
         Fetch daily historical price data from Alpha Vantage.
@@ -100,104 +40,38 @@ class TechnicalAnalysis:
                 print(f"Error fetching data: {response.status_code} - {response.text}")
                 return pd.DataFrame()
             data = response.json()
-        
-            # Debugging
-            print(f"Response keys: {data.keys()}")
-        
             if asset_type.lower() == "crypto":
                 time_series = data.get("Time Series (Digital Currency Daily)", {})
                 if not time_series:
                     print("No crypto time series data returned")
-                    print(f"Full response: {data}")
                     return pd.DataFrame()
                 df = pd.DataFrame.from_dict(time_series, orient='index')
                 df.index = pd.to_datetime(df.index)
                 df = df.sort_index()
-            
-                # Print column names for debugging
-                print(f"Original crypto columns: {df.columns.tolist()}")
-            
                 # Rename the crypto-specific columns to standard names
-                column_map = {
+                df = df.rename(columns={
                     "1a. open (USD)": "open",
                     "2a. high (USD)": "high",
                     "3a. low (USD)": "low",
                     "4a. close (USD)": "close",
-                    "5. volume": "volume"
-                }
-            
-                # Only rename columns that exist
-                rename_dict = {k: v for k, v in column_map.items() if k in df.columns}
-                if not rename_dict:
-                    print("No matching columns found for renaming")
-                    # If none of the expected columns are found, try alternative names
-                    alt_columns = [col for col in df.columns if "open" in col.lower()]
-                    print(f"Alternative columns containing 'open': {alt_columns}")
-                    if alt_columns:
-                        # Try to infer the correct pattern from the first column
-                        pattern = alt_columns[0].split("open")[0]
-                        rename_dict = {
-                            f"{pattern}open (USD)": "open",
-                            f"{pattern}high (USD)": "high",
-                            f"{pattern}low (USD)": "low",
-                            f"{pattern}close (USD)": "close",
-                        }
-            
-                df = df.rename(columns=rename_dict)
-            
-                # Print renamed columns for debugging
-                print(f"Renamed crypto columns: {df.columns.tolist()}")
-            
-                # Check if expected columns exist after renaming
-                expected_cols = ["open", "high", "low", "close"]
-                missing_cols = [col for col in expected_cols if col not in df.columns]
-                if missing_cols:
-                    print(f"Missing expected columns after renaming: {missing_cols}")
-                
-                    # If columns are still missing, try to find them with different patterns
-                    for col in missing_cols:
-                        matches = [c for c in df.columns if col in c.lower()]
-                        if matches:
-                            df[col] = df[matches[0]]
-                            print(f"Used {matches[0]} for {col}")
+                # Optionally include volume if needed
+                })
             else:
                 time_series = data.get("Time Series (Daily)", {})
                 if not time_series:
                     print("No time series data returned")
-                    print(f"Full response: {data}")
                     return pd.DataFrame()
                 df = pd.DataFrame.from_dict(time_series, orient='index')
                 df.index = pd.to_datetime(df.index)
                 df = df.sort_index()
-            
-                # Rename stock columns
-                stock_columns = ['open', 'high', 'low', 'close', 'volume']
-                if len(df.columns) == len(stock_columns):
-                    df.columns = stock_columns
-                else:
-                    print(f"Stock columns mismatch. Expected 5, got {len(df.columns)}: {df.columns.tolist()}")
-        
+                df.columns = ['open', 'high', 'low', 'close', 'volume']
             # Ensure numeric conversion
             for col in ["open", "high", "low", "close"]:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                else:
-                    print(f"Column {col} not found in dataframe")
-                
-            # Final check to ensure we have minimum required columns
-            required_cols = ["open", "high", "low", "close"]
-            if not all(col in df.columns for col in required_cols):
-                print(f"Missing required columns. Current columns: {df.columns.tolist()}")
-                # Create missing columns with NaN values if needed
-                for col in required_cols:
-                    if col not in df.columns:
-                        df[col] = np.nan
-        
+                   df[col] = pd.to_numeric(df[col], errors='coerce')
             return df
         except Exception as e:
             print(f"Exception when fetching daily data for {self.symbol}: {e}")
-            import traceback
-            traceback.print_exc()
             return pd.DataFrame()
 
     def fetch_alpha_vantage_ta(self, indicator, time_period=14, series_type='close'):
