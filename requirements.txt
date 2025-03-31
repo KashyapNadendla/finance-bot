@@ -22,3 +22,4 @@ pandas_ta
 langchain_openai
 ta
 plotly
+pkg_resources
