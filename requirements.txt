@@ -518,3 +518,4 @@ zipp @ file:///Users/cbousseau/work/recipes/ci_py311/zipp_1677907997878/work
 zope.interface @ file:///Users/cbousseau/work/recipes/ci_py311/zope.interface_1678055276546/work
 zstandard @ file:///Users/cbousseau/work/recipes/ci_py311_2/zstandard_1678996192313/work
 setuptools>=65.5.0
+pandas_ta
