@@ -243,12 +243,7 @@ def main():
                 if len(selected) == 2 and generate_ai_comp:
                     t1, a1 = selected[0].split("|")
                     t2, a2 = selected[1].split("|")
-                    # prompt = (
-                    #     f"Compare the forecasted prices for {t1} ({a1}) and {t2} ({a2}) using {forecast_method} over the next {forecast_days} days. "
-                    #     f"For {t1}, the forecast is: {forecast_results[t1]['forecast'].round(2).to_dict()}. "
-                    #     f"For {t2}, the forecast is: {forecast_results[t2]['forecast'].round(2).to_dict()}. "
-                    #     "Provide a brief comparison on the trends and any potential risks."
-                    # )
+
                     t1_forecast = forecast_results[t1]['forecast']
                     t2_forecast = forecast_results[t2]['forecast']
                     t1_display = t1_forecast.round(2).to_dict() if t1_forecast is not None else "No forecast data available"
